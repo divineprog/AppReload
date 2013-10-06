@@ -307,7 +307,7 @@ hyper.UI = {}
 			// TODO: Send string do JSON.stringify on msg.
 			if (mWorkbenchWindow)
 			{
-				mWorkbenchWindow.postMessage(JSON.stringify(msg), '*')
+				mWorkbenchWindow.postMessage(msg, '*')
 			}
 		})
 	}
@@ -371,12 +371,12 @@ hyper.UI = {}
 		console.log('runApp: ' + path)
 		
 		SERVER.setAppPath(path)
-		SERVER.sendReload()
+		
 		
 		if (SERVER.getNumberOfConnectedClients() < 1)
 		{
 			GUI.Shell.openExternal(SERVER.getMainAppFileURL())
-		}
+		} else { SERVER.sendReload() }
 	}
 	
 	// TODO: Should saved apps belong to the UI, rather than to the server?

@@ -169,6 +169,7 @@ function startServers()
     
 		socket.on('log', function(data)
 		{
+			console.log('got log message: ' + data)
 			displayLogMessage(data)
 		})
 		
