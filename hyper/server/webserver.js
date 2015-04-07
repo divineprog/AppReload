@@ -283,7 +283,7 @@ function CreateServerObject()
 		//window.console.log(new Date().toTimeString() + ' SERVING: ' + path)
 		if (null != mHookFun)
 		{
-			// If the hook function returns true it processed the request.
+			// If the hook function returns true it has processed the request.
 			if (mHookFun(request, response, path)) { return }
 		}
 		ServeFile(path, response)

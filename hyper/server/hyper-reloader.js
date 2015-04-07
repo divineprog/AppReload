@@ -96,7 +96,12 @@ window.hyper = (function(hyper, socketIoPort)
 		// Only connect in the topmost window!
 		if (window !== window.top) { return }
 
-		var socket = io(baseUrl + ':' + socketIoPort)
+		// We connect to same server/port as the web page
+		// loaded from, so we do not have to state this.
+		// TODO: Remove commented out code and related variables.
+		//var socket = io(baseUrl + ':' + socketIoPort)
+
+		var socket = io()
 		hyper.IoSocket = socket
 		socket.on('hyper.run', function(data)
 		{
@@ -140,6 +145,7 @@ window.hyper = (function(hyper, socketIoPort)
 		})
 		socket.on('connect', function()
 		{
+			// TODO: Add key here.
 			socket.emit('hyper.client-connected', null)
 			hyper.isConnected = true
 			if (hyper.onConnectedFun)
