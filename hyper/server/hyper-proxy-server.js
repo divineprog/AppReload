@@ -107,7 +107,7 @@ function createSocketIoServer(httpServer)
 		socket.on('disconnect', function ()
 		{
 			// Debug logging.
-			console.log('Client disconnected')
+			console.log('socket.io client disconnected')
 		})
 
 		socket.on('hyper.workbench-connected', function(data)
@@ -116,6 +116,8 @@ function createSocketIoServer(httpServer)
 			console.log('hyper.workbench-connected')
 
 			// TODO: Join room?
+			var room = data['room']
+			socket.join(room)
 		})
 
 		socket.on('hyper.client-connected', function(data)

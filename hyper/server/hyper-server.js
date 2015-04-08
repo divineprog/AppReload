@@ -23,79 +23,12 @@ limitations under the License.
 /*** Modules used ***/
 
 var OS = require('os')
-var SOCKETIO = require('socket.io')
+var SOCKETIO_CLIENT = require('socket.io-client')
 var FS = require('fs')
 var PATH = require('path')
 var FILEUTIL = require('./fileutil.js')
-var WEBSERVER = require('./webserver')
 var SETTINGS = require('../settings/settings.js')
-
-
-/*********************************/
-/***    Security interface     ***/
-/*********************************/
-
-// Used for white listing and for black listing ip addresses.
-var mWhiteList = {}
-var mUnknownIpHandlerFun = null
-
-/**
- * External.
- */
-function setUnknownIpHandler(fun)
-{
-	mUnknownIpHandlerFun = fun
-}
-
-/**
- * External.
- */
-function whiteListIp(ip)
-{
-	mWhiteList[ip] = 1 // Allow
-}
-
-/**
- * External.
- */
-function blackListIp(ip)
-{
-	mWhiteList[ip] = 2 // Deny
-}
-
-/**
- * Internal.
- *
- * Check that requesting client is authorized, and if not
- * serve status pages.
- *
- * TODO: Authorization is not implemented. Plan is to do this with a
- * pincode/password passed by the initial client request.
- */
-function authorizeRequest(request, response)
-{
-	// Is security setting is turned off, all connections are allowed.
-	if (!SETTINGS.AuthorizeConnections)
-	{
-		return true
-	}
-
-	// Is request whitelisted?
-	if (1 === mWhiteList[request.socket.remoteAddress])
-	{
-		return true
-	}
-
-	// Is request blacklisted?
-	if (2 === mWhiteList[request.socket.remoteAddress])
-	{
-		serveHtmlFilePlainlyWithoutReloaderScript(
-			request,
-			response,
-			'./hyper/server/hyper-unauthorized.html')
-		return false
-	}
-}
+var LOADER = require('./resource-loader.js')
 
 /**
  * Internal.
@@ -124,7 +57,6 @@ function serveHtmlFilePlainlyWithoutReloaderScript(request, response, path)
 /*** Server variables ***/
 
 var mWebServer = null
-var mUDPServer = null
 var mIO
 var mBasePath
 var mAppPath
@@ -134,32 +66,20 @@ var mMessageCallback = null
 var mClientConnectedCallback = null
 var mReloadCallback = null
 
-/*** Server functions ***/
+// The current base directory. Must NOT end with a slash.
+var mBasePath = ''
 
-/**
- * NOT USED.
- *
- * Internal.
- *
- * Version of webserver hook function used for serving iframe version.
- */
-/*
-function webServerHookFunForIframe(request, response, path)
+function setBasePath(path)
 {
-	// When the root is requested, we send the document with an
-	// iframe that will load application pages.
-	if (path == '/')
-	{
-		var page = FS.readFileSync('./hyper/server/hyper-client.html', {encoding: 'utf8'})
-		mWebServer.writeRespose(response, page, 'text/html')
-		return true
-	}
-	else
-	{
-		return false
-	}
+	mBasePath = path
 }
-*/
+
+function getBasePath(path)
+{
+	return mBasePath
+}
+
+/*** Server functions ***/
 
 /**
  * Internal.
@@ -749,8 +669,41 @@ function startWebServer(basePath, port, fun)
 	fun(server)
 }
 
+//http://socket.io/blog/introducing-socket-io-1-0/#binary
+
+function connectToProxyServer(url)
+{
+	// Create socket.
+	var socket = SOCKETIO_CLIENT(url)
+
+	// Connect function.
+	socket.on('connect', function()
+	{
+		socket.emit(
+			'hyper.workbench-connected',
+			{ key: mKey }
+			)
+	})
+
+	// Get resource function.
+	socket.on('hyper.resource-request', function(data)
+	{
+		serveResource(data.path)
+
+		socket.emit(
+			'hyper.resource-response',
+			{ image: true, buffer: buf })
+
+		socket.emit(
+			'hyper.resource-response',
+			{ key: mKey }
+			)
+	})
+}
+
 /**
  * Internal.
+ TODO: Delete
  */
 function createSocketIoServer(httpServer)
 {
@@ -812,61 +765,6 @@ function createSocketIoServer(httpServer)
 			})
 		})(socket)*/
 	})
-}
-
-/**
- * Experimental.
- */
-function startUDPServer(port)
-{
-	// Send info about this server back to the client.
-	function sendServerInfo(info)
-	{
-		var serverData =
-		{
-			name: OS.hostname(),
-			port: SETTINGS.WebServerPort
-		}
-
-		var message = new Buffer(JSON.stringify(serverData))
-
-		server.send(
-			message,
-			0,
-			message.length,
-			info.port,
-			info.address,
-			function(err, bytes)
-			{
-			}
-		)
-	}
-
-	// Create server socket.
-	var DATAGRAM = require('dgram')
-	var server = DATAGRAM.createSocket('udp4')
-	mUDPServer = server
-
-	// Set handler for incoming messages.
-	server.on('message', function (msg, info)
-	{
-		if (msg == 'hyper.whoIsThere')
-		{
-			// TODO: Make some allow/deny/whitelist type of
-			// check here? Only send server info if user allows?
-			sendServerInfo(info)
-		}
-	})
-
-	// Set handler for incoming messages.
-	server.on('listening', function ()
-	{
-		// Not used: var address = server.address()
-		window.console.log('UDP server listening')
-	})
-
-	// Bind server socket to port.
-	server.bind(port)
 }
 
 /*********************************/
@@ -978,13 +876,6 @@ function fileSystemMonitorWorker(path, level)
 	return false
 }
 
-/*window.console.log(mBasePath)
-var files = FS.readdirSync(mBasePath)
-for (var i in files)
-{
-	window.console.log(files[i])
-}*/
-
 /*********************************/
 /***	  Module exports	   ***/
 /*********************************/
@@ -1007,6 +898,3 @@ exports.setReloadCallbackFun = setReloadCallbackFun
 exports.setTraverseNumDirectoryLevels = setTraverseNumDirectoryLevels
 exports.getNumberOfMonitoredFiles = getNumberOfMonitoredFiles
 exports.fileSystemMonitor = fileSystemMonitor
-exports.setUnknownIpHandler = setUnknownIpHandler
-exports.whiteListIp = whiteListIp
-exports.blackListIp = blackListIp

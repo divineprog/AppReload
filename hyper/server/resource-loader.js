@@ -1,362 +1,66 @@
-/*
-File: webserver.html
-Author: Mikael Kindborg
+// Module that reads file resources.
 
-Description:
-
-A small web server used to service files.
-You can change the root directory (base path)
-while the server is running.
-
-Full example:
-
-var webserver = require('./WebServer')
-var port = 4042
-var server = webserver.create()
-server.setBasePath('/web')
-server.create()
-server.start(port)
-server.getIpAddress(function(address)
-{
-	window.console.log(
-		'Web server running at:\n' +
-		'http://' + address + ':' + port)
-})
-
-License:
-
-Copyright (c) 2013-2014 Mikael Kindborg
-
-Licensed under the Apache License, Version 2.0 (the "License");
-you may not use this file except in compliance with the License.
-You may obtain a copy of the License at
-
-    http://www.apache.org/licenses/LICENSE-2.0
-
-Unless required by applicable law or agreed to in writing, software
-distributed under the License is distributed on an "AS IS" BASIS,
-WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-See the License for the specific language governing permissions and
-limitations under the License.
-*/
-
-var HTTP = require('http')
-var URL = require('url')
-var NET = require('net')
 var FS = require('fs')
-var OS = require('os')
-// TODO: Not used, remove: var PATH = require('path')
-var DNS = require('dns')
+var PATH = require('path')
 
-// Global Mime type table.
-var MimeTypes = GetDefaultMimeTypes()
+// Mime type table.
+var mMimeTypes = GetDefaultMimeTypes()
 
-/**
- * Create a web server object.
- * @return The server object.
- */
-exports.create = CreateServerObject
-
-function CreateServerObject()
+function ReadResource(path)
 {
-	var self = {}
-
-	// Node.js HTTP server.
-	var mHTTPServer = null
-
-	// The current base directory. Must NOT end with a slash.
-	var mBasePath = ''
-
-	// Hook function allows to trap URL.
-	var mHookFun = null
-
-	/**
-	 * Set the current base path. Path must NOT end with a slash.
-	 */
-	self.setBasePath = function(path)
+	var file = GetFileStatus(path)
+	if (!file)
 	{
-		if (!path) { return }
-
-		// Strip any trailing slash from path.
-		var last = path.length - 1
-		if ((path.charAt(last) === '/') || (path.charAt(last) === '\\'))
-		{
-			path = path.substr(0, last)
-		}
-
-		mBasePath = path
+		return FileNotFoundResponse(path)
 	}
 
-	/**
-	 * Set the hook function.
-	 * Form: fun(request, response, unescapedUrlPath)
-	 */
-	self.setHookFun = function(fun)
+	if (file.isDirectory())
 	{
-		mHookFun = fun
-	}
-
-	/**
-	 * Create the HTTP file server.
-	 */
-	self.create = function()
-	{
-		try
+		// Get default page 'index.html'.
+		// Add ending slash separator if not present.
+		if ('/' != path.charAt(path.length - 1))
 		{
-			mHTTPServer = HTTP.createServer(HandleRequest)
-			return mHTTPServer
+			path = path + '/'
 		}
-		catch (error)
+		path = path + 'index.html'
+		var indexFile = GetFileStatus(path)
+		if (!indexFile)
 		{
-			window.console.log('Could not create webserver: ' + error)
-			return null
+			return FileNotFoundResponse(path)
 		}
 	}
-
-	/**
-	 * Start the HTTP file server.
-	 */
-	self.start = function(port)
+	else
+	if (!file.isFile())
 	{
-		try
-		{
-			mHTTPServer.listen(port)
-		}
-		catch (error)
-		{
-			window.console.log('Could not start webserver: ' + error)
-		}
+		return FileNotFoundResponse(path)
 	}
 
-	/**
-	 * Stop the HTTP server.
-	 */
-	self.stop = function(callback)
-	{
-		try
-		{
-			callback && mHTTPServer.close(callback)
-		}
-		catch (error)
-		{
-			window.console.log('Could not stop webserver: ' + error)
-		}
+	// Return file data object.
+	return FileResponse(path)
+}
+
+function FileResponse(fullPath)
+{
+	var contentType = GetContentType(fullPath)
+	var data = FS.readFileSync(fullPath)
+	return {
+		resultCode: 200, // OK
+		contentType: contentType,
+		content: data,
+		contentLength: data.length
 	}
+}
 
-	/**
-	 * Get the HTTP file server.
-	 */
-	self.getHTTPServer = function()
-	{
-		return mHTTPServer
+function FileNotFoundResponse(path)
+{
+	var data = 'File Not Found: ' + path
+	return {
+		resultCode: 404, // Not found
+		contentType: 'text/html',
+		content: data,
+		contentLength: data.length
 	}
-
-	/**
-	 * Get the public IP address of the machine.
-	 * Tries to get the most appropriate IP-address.
-	 * webserver.getIpAddress(function (address) {
-	 *	 // Do something with address.
-	 *	 })
-	 */
-	self.getIpAddress = function(callbackFun)
-	{
-		var addresses = GetIpAddresses()
-
-		// No address found.
-		if (addresses.length == 0) { callbackFun(null); return }
-
-		// One address found.
-		if (addresses.length > 0)  { callbackFun(addresses[0]); return }
-
-		// Found multiple ip, select the most "suitable" one.
-		// Score system:
-		// 1 127.0.0.1 (whole of 127.x.y.z is localhost)
-		// 2 10.x.y.x
-		// 3 192.168.x.y
-		// 4 not one of the above
-		var bestIp = 0
-		var bestScore = 0
-		for (var i = 0; i < addresses.length; ++i)
-		{
-			var address = addresses[i]
-			var score
-			if (address.indexOf('127.0.0.1') == 0)
-			{
-				score = 1
-			}
-			else
-			if (address.indexOf('10.') == 0)
-			{
-				score = 2
-			}
-			else
-			if (address.indexOf('192.168.') == 0)
-			{
-				score = 3
-			}
-			else
-			{
-				// Found a highest score address, use it.
-				bestIp = i
-				break
-			}
-
-			if (score > bestScore)
-			{
-				bestScore = score
-				bestIp = i
-			}
-		}
-
-		callbackFun(addresses[bestIp])
-	}
-
-	/**
-	 * Get the ip address of the machine that is the best
-	 * match for the given ip.
-	 */
-	self.getMatchingServerIpAddress = function(ip, callbackFun)
-	{
-		var addresses = GetIpAddresses()
-
-		// No address found.
-		if (addresses.length == 0) { callbackFun(null); return }
-
-		// One address found.
-		if (addresses.length > 0)  { callbackFun(addresses[0]); return }
-
-		// Found multiple addresses, select the most similar one.
-		// The score is the number of matching characters from
-		// start of string.
-		var bestIp = 0
-		var bestScore = 0
-		for (var i = 0; i < addresses.length; ++i)
-		{
-			var score = charsInCommon(addresses[i], ip)
-			if (score > bestScore)
-			{
-				bestScore = score
-				bestIp = i
-			}
-		}
-
-		callbackFun(addresses[bestIp])
-	}
-
-	/**
-	 * Helper function.
-	 */
-	function charsInCommon(a, b)
-	{
-		var length = a.length > b.length ? b.length : a.length
-		for (var i = 0; i < length; ++i)
-		{
-			if (a[i] != b[i]) { return i }
-		}
-		return i
-	}
-
-	/**
-	 * Get a list of the public IP address of the machine.
-	 * webserver.getIpAddresses(function (array) {
-	 *	 // Do something with addresses in array.
-	 *	 })
-	 */
-	self.getIpAddresses = function(callbackFun)
-	{
-		callbackFun(GetIpAddresses())
-	}
-
-	self.writeRespose = WriteResponse
-
-	self.writeResponsePageNotFound = function(response)
-	{
-		FileNotFoundResponse('base path not set', response)
-	}
-
-	// Handler for web server requests.
-	function HandleRequest(request, response)
-	{
-		//window.console.log('HandleRequest url: ' + request.url)
-		//request.setEncoding('utf8')
-		var path = unescape(URL.parse(request.url).pathname)
-		//window.console.log(new Date().toTimeString() + ' SERVING: ' + path)
-		if (null != mHookFun)
-		{
-			// If the hook function returns true it has processed the request.
-			if (mHookFun(request, response, path)) { return }
-		}
-		ServeFile(path, response)
-	}
-
-	function ServeFile(path, response)
-	{
-		//window.console.log('ServeFile fillpath: ' + mBasePath + path)
-		var file = GetFileStatus(mBasePath + path)
-		if (!file)
-		{
-			FileNotFoundResponse(path, response)
-			return
-		}
-
-		if (file.isDirectory())
-		{
-			// Get default page 'index.html'.
-			// Add ending slash separator if not present.
-			if ('/' != path.charAt(path.length - 1))
-			{
-				path = path + '/'
-			}
-			path = path + 'index.html'
-			var indexFile = GetFileStatus(mBasePath + path)
-			if (!indexFile)
-			{
-				FileNotFoundResponse(path, response)
-				return
-			}
-		}
-		else
-		if (!file.isFile())
-		{
-			FileNotFoundResponse(path, response)
-			return
-		}
-
-		// Write file data to reponse object.
-		WriteFileResponse(mBasePath + path, response)
-	}
-
-	function WriteFileResponse(fullPath, response)
-	{
-		var contentType = GetContentType(fullPath)
-		var data = FS.readFileSync(fullPath)
-		WriteResponse(response, data, contentType)
-	}
-
-	function WriteResponse(response, data, contentType)
-	{
-		response.writeHead(
-			200,
-			{
-				'Content-Length': data.length,
-				'Content-type': contentType,
-				'Access-Control-Allow-Origin': '*',
-				'Pragma': 'no-cache',
-				'Cache-Control': 'no-cache',
-				'Expires': '-1'
-			})
-		response.write(data)
-		response.end()
-	}
-
-	function FileNotFoundResponse(path, response)
-	{
-		response.writeHead(404)
-		response.end('File Not Found: ' + path)
-	}
-
-	return self;
-};
+}
 
 function GetFileStatus(fullPath)
 {
@@ -366,7 +70,7 @@ function GetFileStatus(fullPath)
 	}
 	catch (ex)
 	{
-		window.console.log('GetFileStatus exception: ' + ex)
+		console.log('GetFileStatus exception: ' + ex)
 		return null
 	}
 }
@@ -374,7 +78,7 @@ function GetFileStatus(fullPath)
 function GetContentType(path)
 {
 	var contentType = null
-	var mappings = MimeTypes
+	var mappings = mMimeTypes
 	var pathLower = path.toLowerCase()
 	var index = pathLower.lastIndexOf('.')
 	if (index > 0)
@@ -390,38 +94,6 @@ function GetContentType(path)
 	{
 		return 'text/plain'
 	}
-}
-
-/**
- * Get the public IP-address for the machine.
- * @param fun Function f(error, address, family)
- * Thanks to nodyou: http://stackoverflow.com/a/8440736/1285614
- * Note: This method does not always work.
- */
-function GetIP_old(fun)
-{
-	DNS.lookup(OS.hostname(), fun)
-}
-
-/**
- * Returns array of public IP-addresses for the machine.
- */
-function GetIpAddresses()
-{
-	var interfaces = OS.networkInterfaces()
-	var addresses = []
-	for (var interfaceName in interfaces)
-	{
-		for (var i in interfaces[interfaceName])
-		{
-			var address = interfaces[interfaceName][i]
-			if (address.family == 'IPv4' && !address.internal)
-			{
-				addresses.push(address.address)
-			}
-		}
-	}
-	return addresses
 }
 
 function GetDefaultMimeTypes()
@@ -838,3 +510,8 @@ function GetDefaultMimeTypes()
 		'~': 'application/x-trash'
 	}
 }
+
+// Exported functions.
+
+exports.readResource = ReadResource
+
