@@ -3,7 +3,7 @@ File: hyper-proxy-server.js
 
 License:
 
-Copyright (c) 2013 Mikael Kindborg
+Copyright (c) 2013-2015 Mikael Kindborg
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -23,13 +23,11 @@ limitations under the License.
 /*********************************/
 
 var OS = require('os')
-var SOCKETIO = require('socket.io')
 var FS = require('fs')
 var PATH = require('path')
+var SOCKETIO = require('socket.io')
 var FILEUTIL = require('./fileutil.js')
 var WEBSERVER = require('./webserver')
-
-console.log('SOCKETIO: ' + SOCKETIO)
 
 /*********************************/
 /***     Global variables      ***/
@@ -48,7 +46,7 @@ var mIO_WorkbenchSockets = []
 
 function main()
 {
-	// Start webserver.
+	// Start webserver and socket.io server.
 	startServers()
 }
 
@@ -93,7 +91,6 @@ nsp.emit('hi', 'everyone!');
 
 function createSocketIoServer(httpServer)
 {
-
 	console.log('Start socket.io server')
 
 	mIO = SOCKETIO(httpServer)
@@ -114,10 +111,18 @@ function createSocketIoServer(httpServer)
 		{
 			// Debug logging.
 			console.log('hyper.workbench-connected')
+			console.log(data)
 
 			// TODO: Join room?
-			var room = data['room']
-			socket.join(room)
+			//var room = data['room']
+			//socket.join(room)
+		})
+
+		socket.on('hyper.resource-response', function(data)
+		{
+			// Debug logging.
+			console.log('hyper.resource-response')
+			console.log(data)
 		})
 
 		socket.on('hyper.client-connected', function(data)
@@ -148,7 +153,7 @@ function createSocketIoServer(httpServer)
 
 		// TODO: This code is not used, remove it eventually.
 		// Closure that holds socket connection.
-		(function(socket)
+		/*(function(socket)
 		{
 			//mSockets.push_back(socket)
 			//socket.emit('news', { hello: 'world' });
@@ -156,25 +161,40 @@ function createSocketIoServer(httpServer)
 			{
 				mSockets.remove(socket)
 			})
-		})(socket)
+		})(socket)*/
 	})
-*/
 }
 
 // Format: /hyper/<key>/request
 function webServerHookFunction(request, response, path)
 {
-	console.log('Request Object')
-	printObject(getRequestElements(path))
+	//console.log('Request Object')
+	//printObject(getRequestElements(path))
+
+	// Platform flags (boolean values).
+	var userAgent = request['headers']['user-agent']
+	var isAndroid = userAgent.indexOf('Android') > 0
+	var isIOS =
+		(userAgent.indexOf('iPhone') > 0) ||
+		(userAgent.indexOf('iPad') > 0) ||
+		(userAgent.indexOf('iPod') > 0)
+	var isWP = userAgent.indexOf('Windows Phone') > 0
+
+	// Set platform string value.
+	var platform = 'unknown'
+	platform = isAndroid && 'android'
+	platform = isIOS && 'ios'
+	platform = isWP && 'wp'
 
 	var requestElements = getRequestElements(path)
 
-	if (requestElements && isHyperRequest(requestElements['hyper']))
+	if (requestElements && isHyperRequest(requestElements.hyper))
 	{
 		// Send request to the client.
 		requestResourse(
-			requestElements['request'],
-			requestElements['key'],
+			requestElements.request,
+			platform,
+			requestElements.key,
 			response)
 
 		// Test
@@ -188,7 +208,6 @@ function webServerHookFunction(request, response, path)
 	}
 	else
 	{
-		// Serve the root request.
 		mWebServer.writeRespose(
 			response,
 			'Other Request: ' + path,
@@ -223,14 +242,24 @@ function getRequestElements(path)
 	return { hyper: part1, key: part2, request: part3 }
 }
 
-function requestResourse(request, key)
+function requestResourse(path, platform, key, response)
 {
 	// Get socket.io connection for key.
 
 	// Send request and wait for result.
-	//mIO.emit('hyper.request-resource', {})
+	var data = { key: key, platform: platform, path: path }
+	mIO.emit('hyper.resource-request', data)
+	console.log('sent hyper.resource-request')
+	console.log(data)
 
 	// Send result to client.
+	/*
+		mWebServer.writeRespose(
+			response,
+			'Hyper Request: ' + requestElements['request']
+				+ ' Key: ' + requestElements['key'],
+			'text/html')
+	*/
 }
 
 /*
@@ -244,6 +273,7 @@ function getRequestKey(path)
 }
 */
 
+/*
 function printObject(obj, printFun)
 {
 	printFun = printFun || console.log;
@@ -269,15 +299,6 @@ function printObject(obj, printFun)
 	}
 	print(obj, 0)
 }
-
-//process server requests, session code in url
-
-//hook functions
-
-// send file request to workbench
-
-// start socket.io server for client and workbench
-
+*/
 
 main()
-

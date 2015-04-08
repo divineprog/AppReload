@@ -4,14 +4,14 @@ var FS = require('fs')
 var PATH = require('path')
 
 // Mime type table.
-var mMimeTypes = GetDefaultMimeTypes()
+var mMimeTypes = getDefaultMimeTypes()
 
-function ReadResource(path)
+function readResource(path)
 {
-	var file = GetFileStatus(path)
+	var file = getFileStatus(path)
 	if (!file)
 	{
-		return FileNotFoundResponse(path)
+		return fileNotFoundResponse(path)
 	}
 
 	if (file.isDirectory())
@@ -23,26 +23,36 @@ function ReadResource(path)
 			path = path + '/'
 		}
 		path = path + 'index.html'
-		var indexFile = GetFileStatus(path)
+		var indexFile = getFileStatus(path)
 		if (!indexFile)
 		{
-			return FileNotFoundResponse(path)
+			return fileNotFoundResponse(path)
 		}
 	}
-	else
-	if (!file.isFile())
+	else if (!file.isFile())
 	{
-		return FileNotFoundResponse(path)
+		return fileNotFoundResponse(path)
 	}
 
 	// Return file data object.
-	return FileResponse(path)
+	return fileResponse(path)
 }
 
-function FileResponse(fullPath)
+function fileResponse(fullPath)
 {
-	var contentType = GetContentType(fullPath)
+	var contentType = getContentType(fullPath)
 	var data = FS.readFileSync(fullPath)
+	return createResponse(data, contentType)
+}
+
+function fileNotFoundResponse(path)
+{
+	var data = 'File Not Found: ' + path
+	return createErrorResponse(data)
+}
+
+function createResponse(data, contentType)
+{
 	return {
 		resultCode: 200, // OK
 		contentType: contentType,
@@ -51,9 +61,8 @@ function FileResponse(fullPath)
 	}
 }
 
-function FileNotFoundResponse(path)
+function createErrorResponse(data)
 {
-	var data = 'File Not Found: ' + path
 	return {
 		resultCode: 404, // Not found
 		contentType: 'text/html',
@@ -62,7 +71,7 @@ function FileNotFoundResponse(path)
 	}
 }
 
-function GetFileStatus(fullPath)
+function getFileStatus(fullPath)
 {
 	try
 	{
@@ -75,7 +84,7 @@ function GetFileStatus(fullPath)
 	}
 }
 
-function GetContentType(path)
+function getContentType(path)
 {
 	var contentType = null
 	var mappings = mMimeTypes
@@ -96,7 +105,7 @@ function GetContentType(path)
 	}
 }
 
-function GetDefaultMimeTypes()
+function getDefaultMimeTypes()
 {
 	return {
 		'%': 'application/x-trash',
@@ -513,5 +522,6 @@ function GetDefaultMimeTypes()
 
 // Exported functions.
 
-exports.readResource = ReadResource
-
+exports.readResource = readResource
+exports.createResponse = createResponse
+exports.createErrorResponse = createErrorResponse
