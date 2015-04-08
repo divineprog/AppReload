@@ -480,11 +480,15 @@ function connectToProxyServer(url)
 		console.log('hyper.resource-request')
 		console.log(data)
 		var response = serveResource(data.platform, data.path)
-		console.log('response')
-		console.log(response)
+		//console.log('response')
+		//console.log(response)
 		socket.emit(
 			'hyper.resource-response',
-			{ key: 'MySecretKey', response: response })
+			{
+				id: data.id,
+				key: 'MySecretKey',
+				response: response
+			})
 	})
 }
 

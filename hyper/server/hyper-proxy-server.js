@@ -39,6 +39,8 @@ var mBasePath = ''
 var mIO = null
 var mIO_ClientSockets = []
 var mIO_WorkbenchSockets = []
+var mResourseRequestCounter = 1
+var mResourseRequestCallbacks = {}
 
 /*********************************/
 /***       Main function       ***/
@@ -123,6 +125,8 @@ function createSocketIoServer(httpServer)
 			// Debug logging.
 			console.log('hyper.resource-response')
 			console.log(data)
+			mResourseRequestCallbacks[data.id](data)
+			delete mResourseRequestCallbacks[data.id]
 		})
 
 		socket.on('hyper.client-connected', function(data)
@@ -168,8 +172,7 @@ function createSocketIoServer(httpServer)
 // Format: /hyper/<key>/request
 function webServerHookFunction(request, response, path)
 {
-	//console.log('Request Object')
-	//printObject(getRequestElements(path))
+	console.log('webServerHookFunction')
 
 	// Platform flags (boolean values).
 	var userAgent = request['headers']['user-agent']
@@ -190,6 +193,8 @@ function webServerHookFunction(request, response, path)
 
 	if (requestElements && isHyperRequest(requestElements.hyper))
 	{
+		console.log('Request elements')
+		console.log(requestElements)
 		// Send request to the client.
 		requestResourse(
 			requestElements.request,
@@ -237,7 +242,7 @@ function getRequestElements(path)
 
 	var part1 = path.substring(1, slash2)
 	var part2 = path.substring(slash2 + 1, slash3)
-	var part3 = path.substring(slash3 + 1)
+	var part3 = path.substring(slash3)
 
 	return { hyper: part1, key: part2, request: part3 }
 }
@@ -247,19 +252,29 @@ function requestResourse(path, platform, key, response)
 	// Get socket.io connection for key.
 
 	// Send request and wait for result.
-	var data = { key: key, platform: platform, path: path }
+	// TODO: Use room or namespace for key.
+	++mResourseRequestCounter
+	var data = {
+		id: mResourseRequestCounter,
+		key: key,
+		platform: platform,
+		path: path
+		}
 	mIO.emit('hyper.resource-request', data)
 	console.log('sent hyper.resource-request')
 	console.log(data)
 
-	// Send result to client.
-	/*
-		mWebServer.writeRespose(
-			response,
-			'Hyper Request: ' + requestElements['request']
-				+ ' Key: ' + requestElements['key'],
-			'text/html')
-	*/
+	mResourseRequestCallbacks[mResourseRequestCounter] =
+		function(data)
+		{
+			console.log('writing response for hyper.resource-request')
+			// Send result to client.
+			// TODO: Handle error pages.
+			mWebServer.writeRespose(
+				response,
+				data.response.content,
+				data.response.contentType)
+		}
 }
 
 /*
