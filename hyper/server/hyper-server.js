@@ -1,5 +1,7 @@
 /*
-File: hyper-proxy-server.js
+File: hyper-server.js
+Description: HyperReload remote server functionality.
+Author: Mikael Kindborg
 
 License:
 
@@ -28,6 +30,7 @@ var PATH = require('path')
 var SOCKETIO = require('socket.io')
 var FILEUTIL = require('./fileutil.js')
 var WEBSERVER = require('./webserver')
+var L = require('./log.js')
 
 /*********************************/
 /***     Global variables      ***/
@@ -58,42 +61,28 @@ function main()
 
 function startServers()
 {
-	console.log('Start servers')
+	L.log('Start servers')
 
-	console.log('Start web server')
-	startWebServer(mBasePath, mWebServerPort, function(server)
-	{
-		console.log('Web server started')
-		mWebServer = server
-		mWebServer.setHookFun(webServerHookFunction)
-	})
+	mWebServer = createWebServer()
+	L.log('Web server started')
+
+	createSocketIoServer(mWebServer.getHTTPServer())
+	L.log('Socket.io server started')
 }
 
-function startWebServer(basePath, port, fun)
+function createWebServer()
 {
 	var server = WEBSERVER.create()
-	server.setBasePath(basePath)
+	server.setBasePath(mBasePath)
 	server.create()
-	createSocketIoServer(server.getHTTPServer())
-	server.start(port)
-	fun(server)
+	server.setHookFun(webServerHookFunction)
+	server.start(mWebServerPort)
+	return server
 }
-
-/*
-Use rooms for client/workbench
-
-Use namespace for keys
-
-var nsp = io.of('/my-namespace');
-nsp.on('connection', function(socket){
-  console.log('someone connected'):
-});
-nsp.emit('hi', 'everyone!');
-*/
 
 function createSocketIoServer(httpServer)
 {
-	console.log('Start socket.io server')
+	L.log('Start socket.io server')
 
 	mIO = SOCKETIO(httpServer)
 
@@ -101,78 +90,94 @@ function createSocketIoServer(httpServer)
 	mIO.on('connection', function(socket)
 	{
 		// Debug logging.
-		console.log('socket.io client connected')
+		L.log('socket.io client connected')
+
+		// ****** Disconnect ******
 
 		socket.on('disconnect', function ()
 		{
 			// Debug logging.
-			console.log('socket.io client disconnected')
+			L.log('socket.io client disconnected')
 		})
+
+		// ****** Messages from the workbench client ******
 
 		socket.on('hyper.workbench-connected', function(data)
 		{
 			// Debug logging.
-			console.log('hyper.workbench-connected')
-			console.log(data)
+			L.log('hyper.workbench-connected')
 
-			// TODO: Join room?
-			//var room = data['room']
-			//socket.join(room)
+			// Join room.
+			var key = data.key
+			var room = 'workbench-' + key
+			socket.join(room)
 		})
 
 		socket.on('hyper.resource-response', function(data)
 		{
 			// Debug logging.
-			console.log('hyper.resource-response')
-			console.log(data)
+			L.log('hyper.resource-response')
 			mResourseRequestCallbacks[data.id](data)
 			delete mResourseRequestCallbacks[data.id]
 		})
 
+		socket.on('hyper.run', function(data)
+		{
+			// Pass URL to run to mobile clients.
+			var room = 'client-' + data.key
+			mIO.to(room).emit('hyper.run', data.url)
+		})
+
+		socket.on('hyper.reload', function(data)
+		{
+	L.log('server hyper.reload')
+			// Pass reload command to mobile clients.
+			var room = 'client-' + data.key
+			mIO.to(room).emit('hyper.reload', {})
+		})
+
+		socket.on('hyper.eval', function(data)
+		{
+
+	L.log('server hyper.eval: ' + data.code)
+			// Pass code to eval to mobile clients.
+			var room = 'client-' + data.key
+			mIO.to(room).emit('hyper.eval', data.code)
+		})
+
+		// ****** Messages from the mobile client ******
+
 		socket.on('hyper.client-connected', function(data)
 		{
 			// Debug logging.
-			console.log('hyper.client-connected')
+			L.log('hyper.client-connected')
 
-			// TODO: Join room?
+			// Join room.
+			var key = data.key
+			var room = 'client-' + key
+			socket.join(room)
 		})
 
 		socket.on('hyper.log', function(data)
 		{
-			displayLogMessage(data)
+			// Pass log message to the workbench.
+			var room = 'workbench-' + data.key
+			mIO.to(room).emit('hyper.log', data.message)
 		})
 
 		socket.on('hyper.result', function(data)
 		{
-			//window.console.log('data result type: ' + (typeof data))
-			//window.console.log('data result : ' + data)
-
-			// Functions cause a cloning error.
-			if (typeof data == 'function')
-			{
-				data = typeof data
-			}
-			displayJsResult(data)
+			// Pass result message to the workbench.
+			var room = 'workbench-' + data.key
+			mIO.to(room).emit('hyper.log', data.result)
 		})
-
-		// TODO: This code is not used, remove it eventually.
-		// Closure that holds socket connection.
-		/*(function(socket)
-		{
-			//mSockets.push_back(socket)
-			//socket.emit('news', { hello: 'world' });
-			socket.on('unregister', function(data)
-			{
-				mSockets.remove(socket)
-			})
-		})(socket)*/
 	})
 }
 
-// Format: /hyper/<key>/request
+// Path format: /hyper/<key>/<request>
 function webServerHookFunction(request, response, path)
 {
-	console.log('webServerHookFunction')
+	L.log('webServerHookFunction: ' + path)
 
 	// Platform flags (boolean values).
 	var userAgent = request['headers']['user-agent']
@@ -193,34 +198,54 @@ function webServerHookFunction(request, response, path)
 
 	if (requestElements && isHyperRequest(requestElements.hyper))
 	{
-		console.log('Request elements')
-		console.log(requestElements)
-		// Send request to the client.
+		// Send request for file to workbench.
 		requestResourse(
 			requestElements.request,
 			platform,
 			requestElements.key,
 			response)
-
-		// Test
-		/*
-		mWebServer.writeRespose(
-			response,
-			'Hyper Request: ' + requestElements['request']
-				+ ' Key: ' + requestElements['key'],
-			'text/html')
-		*/
 	}
 	else
 	{
+		L.log('*** Other Request: ' + path)
 		mWebServer.writeRespose(
 			response,
 			'Other Request: ' + path,
 			'text/html')
 	}
 
-	// Tell web server no further processing should be done.
+	// Return true to tell web server no further processing should be done.
 	return true
+}
+
+function requestResourse(path, platform, key, response)
+{
+	// Get socket.io connection for key.
+
+	// Send request and wait for result.
+	// TODO: Use room or namespace for key.
+	++mResourseRequestCounter
+	var data = {
+		id: mResourseRequestCounter,
+		key: key,
+		platform: platform,
+		path: path
+		}
+	var room = 'workbench-' + key
+	mIO.to(room).emit('hyper.resource-request', data)
+	L.log('sent hyper.resource-request to ' + room + ' : ' + path)
+
+	mResourseRequestCallbacks[mResourseRequestCounter] =
+		function(data)
+		{
+			L.log('writing response for hyper.resource-request' + ' : ' + path)
+			// Send result to client.
+			// TODO: Handle error pages.
+			mWebServer.writeRespose(
+				response,
+				data.response.content,
+				data.response.contentType)
+		}
 }
 
 function isHyperRequest(token)
@@ -247,36 +272,6 @@ function getRequestElements(path)
 	return { hyper: part1, key: part2, request: part3 }
 }
 
-function requestResourse(path, platform, key, response)
-{
-	// Get socket.io connection for key.
-
-	// Send request and wait for result.
-	// TODO: Use room or namespace for key.
-	++mResourseRequestCounter
-	var data = {
-		id: mResourseRequestCounter,
-		key: key,
-		platform: platform,
-		path: path
-		}
-	mIO.emit('hyper.resource-request', data)
-	console.log('sent hyper.resource-request')
-	console.log(data)
-
-	mResourseRequestCallbacks[mResourseRequestCounter] =
-		function(data)
-		{
-			console.log('writing response for hyper.resource-request')
-			// Send result to client.
-			// TODO: Handle error pages.
-			mWebServer.writeRespose(
-				response,
-				data.response.content,
-				data.response.contentType)
-		}
-}
-
 /*
 function getRequestKey(path)
 {
@@ -285,34 +280,6 @@ function getRequestKey(path)
 	var nextSlash = path.indexOf('/', tokenLength)
 	var key = path.substr(tokenLength, nextSlash - 1)
 	return key
-}
-*/
-
-/*
-function printObject(obj, printFun)
-{
-	printFun = printFun || console.log;
-	function print(obj, level)
-	{
-		var indent = new Array(level + 1).join('  ')
-		for (var prop in obj)
-		{
-			if (obj.hasOwnProperty(prop))
-			{
-				var value = obj[prop]
-				if (typeof value == 'object')
-				{
-					printFun(indent + prop + ':')
-					print(value, level + 1)
-				}
-				else
-				{
-					printFun(indent + prop + ': ' + value)
-				}
-			}
-		}
-	}
-	print(obj, 0)
 }
 */
 

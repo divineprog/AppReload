@@ -1,6 +1,6 @@
 /*
-File: hyper-server.js
-Description: HyperReload server functionality.
+File: hyper-file-server.js
+Description: HyperReload local file server.
 Author: Mikael Kindborg
 
 License:
@@ -20,7 +20,9 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
-/*** Modules used ***/
+/*********************************/
+/***     Imported modules      ***/
+/*********************************/
 
 var OS = require('os')
 var FS = require('fs')
@@ -29,18 +31,16 @@ var SOCKETIO_CLIENT = require('socket.io-client')
 var FILEUTIL = require('./fileutil.js')
 var SETTINGS = require('../settings/settings.js')
 var LOADER = require('./resource-loader.js')
+var L = require('./log.js')
 
 /*********************************/
-/***	   Server code		   ***/
+/***     Server variables      ***/
 /*********************************/
 
-/*** Server variables ***/
-
-var mWebServer
-var mIO
+var mUserKey = 'MyKey'
+var mSocket
 var mAppPath
 var mAppFile
-var mIpAddress
 var mMessageCallback
 var mClientConnectedCallback
 var mReloadCallback
@@ -48,13 +48,89 @@ var mReloadCallback
 // The current base directory. Must NOT end with a slash.
 var mBasePath = ''
 
-/*** Server functions ***/
+/*********************************/
+/***     Server functions      ***/
+/*********************************/
+
+function connectToRemoteServer(url)
+{
+	L.log('creating socket')
+
+	// Create socket.
+	var socket = SOCKETIO_CLIENT(url)
+
+	// Global reference
+	mSocket = socket
+
+	// Connect function.
+	socket.on('connect', function()
+	{
+		// Send key to server to join room.
+		socket.emit(
+			'hyper.workbench-connected',
+			{
+				key: mUserKey
+			})
+	})
+
+	socket.on('disconnect', function ()
+	{
+		// Debug logging.
+		L.log('Disconnected from remote server')
+	})
+
+	// Get resource function.
+	socket.on('hyper.resource-request', function(data)
+	{
+		L.log('hyper.resource-request: ' + data.path)
+		var response = serveResource(data.platform, data.path)
+		socket.emit(
+			'hyper.resource-response',
+			{
+				id: data.id,
+				key: mUserKey,
+				response: response
+			})
+	})
+
+
+	socket.on('hyper.client-connected', function(data)
+	{
+		// Debug logging.
+		L.log('hyper.client-connected')
+
+		// Notify UI callback that a client has connected.
+		mClientConnectedCallback && mClientConnectedCallback()
+	})
+
+	socket.on('hyper.log', function(data)
+	{
+		mMessageCallback && mMessageCallback(
+			{ message: 'hyper.log', logMessage: data })
+	})
+
+	socket.on('hyper.result', function(data)
+	{
+		//L.log('data result type: ' + (typeof data))
+		//L.log('data result : ' + data)
+
+		// Functions cause a cloning error, just send the type.
+		if (typeof data == 'function')
+		{
+			data = typeof data
+		}
+		mMessageCallback && mMessageCallback(
+			{ message: 'hyper.result', result: data })
+	})
+}
 
 /**
  * Internal.
  */
 function serveResource(platform, path)
 {
+	L.log('serveResource: ' + path)
+
 	if (path == '/')
 	{
 		// Serve the root request (Connect page).
@@ -94,6 +170,7 @@ function serveResource(platform, path)
  */
 function serveRootRequest()
 {
+L.log('serveReloaderScript')
 	// Set the app path so that the server/ui directory can be accessed.
 	setAppPath(process.cwd() + '/hyper/server/hyper-connect.html')
 
@@ -108,8 +185,12 @@ function serveRootRequest()
  */
 function serveReloaderScript()
 {
+L.log('serveReloaderScript')
 	var script = FILEUTIL.readFileSync('./hyper/server/hyper-reloader.js')
-	return script
+	script = script.replace(
+		'__USER_KEY_INSERTED_BY_SERVER__',
+		mUserKey)
+	return LOADER.createResponse(script, 'application/javascript')
 }
 
 /**
@@ -246,7 +327,7 @@ function createReloaderScriptTags()
 {
 	return ''
 		+ '<script src="/socket.io/socket.io.js"></script>'
-		+ '<script src="/hyper.reloader"></script>'
+		+ '<script src="/hyper/MyKey/hyper.reloader"></script>'
 }
 
 /**
@@ -351,9 +432,9 @@ function getBasePath()
 /**
  * External.
  */
-function getAppFileURL()
+function getAppServerURL()
 {
-	return 'http://' + mIpAddress + ':' + SETTINGS.WebServerPort + '/' + mAppFile
+	return 'http://localhost:4044/hyper/MyKey/' + mAppFile
 }
 
 /**
@@ -361,7 +442,7 @@ function getAppFileURL()
  */
 function getServerBaseURL()
 {
-	return 'http://' + mIpAddress + ':' + SETTINGS.WebServerPort + '/'
+	return 'http://localhost:4044/hyper/MyKey/'
 }
 
 /**
@@ -371,7 +452,7 @@ function getServerBaseURL()
  */
 function runApp()
 {
-	mIO.emit('hyper.run', {url: getAppFileURL()})
+	mSocket.emit('hyper.run', { key: mUserKey, url: getAppFileURL() })
 }
 
 /**
@@ -381,7 +462,7 @@ function runApp()
  */
 function reloadApp()
 {
-	mIO.emit('hyper.reload', {})
+	mSocket.emit('hyper.reload', { key: mUserKey })
 	mReloadCallback && mReloadCallback()
 }
 
@@ -390,7 +471,8 @@ function reloadApp()
  */
 function evalJS(code)
 {
-	mIO.emit('hyper.eval', code)
+	L.log('emit eval: ' + code)
+	mSocket.emit('hyper.eval', { key: mUserKey, code: code })
 }
 
 /**
@@ -423,137 +505,6 @@ function setReloadCallbackFun(fun)
 	mReloadCallback = fun
 }
 
-/**
- * Internal.
- */
-function displayLogMessage(message)
-{
-	if (mMessageCallback)
-	{
-		mMessageCallback({ message: 'hyper.log', logMessage: message })
-	}
-}
-
-/**
- * Internal.
- */
-function displayJsResult(result)
-{
-	if (mMessageCallback)
-	{
-		mMessageCallback({ message: 'hyper.result', result: result })
-	}
-}
-
-/**
- * Internal.
- */
-function startWebServer(basePath, port, fun)
-{
-	var server = WEBSERVER.create()
-	server.setBasePath(basePath)
-	server.create()
-	createSocketIoServer(server.getHTTPServer())
-	server.start(port)
-	fun(server)
-}
-
-//http://socket.io/blog/introducing-socket-io-1-0/#binary
-
-function connectToProxyServer(url)
-{
-	// Create socket.
-	var socket = SOCKETIO_CLIENT(url)
-
-	// Connect function.
-	socket.on('connect', function()
-	{
-		socket.emit(
-			'hyper.workbench-connected',
-			{ key: 'MySecretKey' }
-			)
-	})
-
-	// Get resource function.
-	socket.on('hyper.resource-request', function(data)
-	{
-		console.log('hyper.resource-request')
-		console.log(data)
-		var response = serveResource(data.platform, data.path)
-		//console.log('response')
-		//console.log(response)
-		socket.emit(
-			'hyper.resource-response',
-			{
-				id: data.id,
-				key: 'MySecretKey',
-				response: response
-			})
-	})
-}
-
-/**
- * Internal.
- * TODO: Delete
- */
-/*
-function createSocketIoServer(httpServer)
-{
-	mIO = SOCKETIO(httpServer)
-
-	// Handle socket connections.
-	mIO.on('connection', function(socket)
-	{
-		// Debug logging.
-		window.console.log('Client connected')
-
-		socket.on('disconnect', function ()
-		{
-			// Debug logging.
-			window.console.log('Client disconnected')
-		})
-
-		socket.on('hyper.client-connected', function(data)
-		{
-			// Debug logging.
-			window.console.log('hyper.client-connected')
-
-			mClientConnectedCallback && mClientConnectedCallback()
-		})
-
-		socket.on('hyper.log', function(data)
-		{
-			displayLogMessage(data)
-		})
-
-		socket.on('hyper.result', function(data)
-		{
-			//window.console.log('data result type: ' + (typeof data))
-			//window.console.log('data result : ' + data)
-
-			// Functions cause a cloning error.
-			if (typeof data == 'function')
-			{
-				data = typeof data
-			}
-			displayJsResult(data)
-		})
-
-		// TODO: This code is not used, remove it eventually.
-		// Closure that holds socket connection.
-		/ *(function(socket)
-		{
-			//mSockets.push_back(socket)
-			//socket.emit('news', { hello: 'world' });
-			socket.on('unregister', function(data)
-			{
-				mSockets.remove(socket)
-			})
-		})(socket)* /
-	})
-}
-*/
-
 /*********************************/
 /***	  Module exports	   ***/
 /*********************************/
@@ -562,7 +513,7 @@ exports.setAppPath = setAppPath
 exports.getAppPath = getAppPath
 exports.getBasePath = getBasePath
 exports.getAppFileName = getAppFileName
-exports.getAppFileURL = getAppFileURL
+exports.getAppServerURL = getAppServerURL
 exports.getServerBaseURL = getServerBaseURL
 exports.runApp = runApp
 exports.reloadApp = reloadApp
@@ -571,5 +522,4 @@ exports.setMessageCallbackFun = setMessageCallbackFun
 exports.setClientConnenctedCallbackFun = setClientConnenctedCallbackFun
 exports.setReloadCallbackFun = setReloadCallbackFun
 exports.serveResource = serveResource
-exports.connectToProxyServer = connectToProxyServer
-
+exports.connectToRemoteServer = connectToRemoteServer

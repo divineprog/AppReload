@@ -7,7 +7,7 @@ Copyright (c) 2013-2014 Mikael Kindborg
 License: Apache Version 2.0
 */
 
-window.hyper = (function(hyper, socketIoPort)
+window.hyper = (function(hyper, userKey)
 {
 	// Buffer for storing hyper.log messages.
 	var hyperLogBuffer = []
@@ -39,7 +39,7 @@ window.hyper = (function(hyper, socketIoPort)
 	hyper.sendJsResult = function(result)
 	{
 		hyper.isConnected &&
-		hyper.IoSocket.emit('hyper.result', result)
+			hyper.IoSocket.emit('hyper.result', { key: userKey, result: result })
 	}
 
 	// Log to remote HyperReload Workbench window.
@@ -47,7 +47,7 @@ window.hyper = (function(hyper, socketIoPort)
 	{
 		if (hyper.isConnected)
 		{
-			hyper.IoSocket.emit('hyper.log', message)
+			hyper.IoSocket.emit('hyper.log', { key: userKey, message: message })
 		}
 		else
 		{
@@ -133,6 +133,7 @@ window.hyper = (function(hyper, socketIoPort)
 		})
 		socket.on('hyper.eval', function(data)
 		{
+			console.log('client eval: ' + data)
 			try
 			{
 				var result = eval(data)
@@ -146,7 +147,7 @@ window.hyper = (function(hyper, socketIoPort)
 		socket.on('connect', function()
 		{
 			// TODO: Add key here.
-			socket.emit('hyper.client-connected', null)
+			socket.emit('hyper.client-connected', { key: userKey })
 			hyper.isConnected = true
 			if (hyper.onConnectedFun)
 			{
@@ -220,4 +221,4 @@ window.hyper = (function(hyper, socketIoPort)
 
 	return hyper
 
-})(window.hyper || {}, __SOCKET_IO_PORT_INSERTED_BY_SERVER__)
+})(window.hyper || {}, '__USER_KEY_INSERTED_BY_SERVER__')

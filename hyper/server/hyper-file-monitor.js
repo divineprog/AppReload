@@ -1,6 +1,6 @@
 /*
 File: hyper-file-monitor.js
-Description: Filemonitoring functionality
+Description: File monitoring functionality
 Author: Mikael Kindborg
 
 License:
@@ -23,6 +23,7 @@ limitations under the License.
 /*** Modules used ***/
 
 var FS = require('fs')
+var L = require('./log.js')
 
 /*** File traversal variables ***/
 
@@ -30,8 +31,17 @@ var mLastReloadTime = Date.now()
 var mTraverseNumDirecoryLevels = 0
 var mFileCounter = 0
 var mNumberOfMonitoredFiles = 0
+var mBasePath = null
 
 /*** File traversal functions ***/
+
+/**
+ * External.
+ */
+function setBasePath(path)
+{
+	mBasePath = path
+}
 
 /**
  * External.
@@ -82,7 +92,7 @@ function fileSystemMonitorWorker(path, level)
 		/*var files = FS.readdirSync(path)
 		for (var i in files)
 		{
-			console.log(path + files[i])
+			L.log(path + files[i])
 		}
 		return false*/
 
@@ -99,16 +109,16 @@ function fileSystemMonitorWorker(path, level)
 					++mFileCounter
 				}
 
-				//console.log('Checking file: ' + files[i] + ': ' + stat.mtime)
+				//L.log('Checking file: ' + files[i] + ': ' + stat.mtime)
 				if (stat.isFile() && t > mLastReloadTime)
 				{
-					//console.log('***** File has changed ***** ' + files[i])
+					//L.log('***** File has changed ***** ' + files[i])
 					mLastReloadTime = Date.now()
 					return true
 				}
 				else if (stat.isDirectory() && level > 0)
 				{
-					//console.log('Decending into: ' + path + files[i])
+					//L.log('Decending into: ' + path + files[i])
 					var changed = fileSystemMonitorWorker(
 						path + files[i] + '/',
 						level - 1)
@@ -117,19 +127,20 @@ function fileSystemMonitorWorker(path, level)
 			}
 			catch (err2)
 			{
-				console.log('ERROR in fileSystemMonitorWorker inner loop: ' + err2)
+				L.log('ERROR in fileSystemMonitorWorker inner loop: ' + err2)
 			}
 		}
 	}
 	catch(err1)
 	{
-		console.log('ERROR in fileSystemMonitorWorker: ' + err1)
+		L.log('ERROR in fileSystemMonitorWorker: ' + err1)
 	}
 	return false
 }
 
 /*** Module exports ***/
 
+exports.setBasePath = setBasePath
 exports.setTraverseNumDirectoryLevels = setTraverseNumDirectoryLevels
 exports.getNumberOfMonitoredFiles = getNumberOfMonitoredFiles
 exports.fileSystemMonitor = fileSystemMonitor

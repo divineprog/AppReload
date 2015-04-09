@@ -5,7 +5,7 @@ Author: Mikael Kindborg
 
 License:
 
-Copyright (c) 2013-2014 Mikael Kindborg
+Copyright (c) 2013-2015 Mikael Kindborg
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -25,15 +25,15 @@ limitations under the License.
 // eventual headless version of HyperReload. Code currently
 // contains serveral dependencies, however.
 
-/*** Modules used ***/
+/*** Imported modules ***/
 
 var FS = require('fs')
 var PATH = require('path')
 var OS = require('os')
 var GUI = require('nw.gui')
-
-require('../server/prepare-settings.js')
 var FILEUTIL = require('../server/fileutil.js')
+var L = require('../server/log.js')
+require('../server/prepare-settings.js')
 var SETTINGS = require('../settings/settings.js')
 
 /*** Globals ***/
@@ -47,6 +47,8 @@ global.mainHyper = hyper
 
 // UI-related functions.
 hyper.UI = {}
+
+hyper.remoteServerURL = 'http://localhost:4044/'
 
 /*** UI setup ***/
 
@@ -81,7 +83,7 @@ hyper.UI = {}
 			}
 			catch (ex)
 			{
-				window.console.log('Error creating OS X menubar: ' + ex.message);
+				L.log('Error creating OS X menubar: ' + ex.message);
 			}
 		}
 	}
@@ -234,7 +236,7 @@ hyper.UI = {}
 
 	function receiveMessage(event)
 	{
-		//window.console.log('Main got : ' + event.data.message)
+		//L.log('Main got : ' + event.data.message)
 		if ('eval' == event.data.message)
 		{
 			hyper.SERVER.evalJS(event.data.code)
@@ -282,7 +284,7 @@ hyper.UI = {}
 		// Debug print.
 		/*for (var i = 0; i < files.length; ++i)
 		{
-			window.console.log(files[i].path);
+			L.log(files[i].path);
 		}*/
 
 		for (var i = 0; i < files.length; ++i)
@@ -336,7 +338,7 @@ hyper.UI = {}
 		if (!data)
 		{
 			// Return on error, skipping rest of the code.
-			window.console.log('createProjectEntry failed: ' + path)
+			L.log('createProjectEntry failed: ' + path)
 			return
 		}
 
@@ -358,7 +360,7 @@ hyper.UI = {}
 
 		// Create element.
 		var element = $(html)
-		//window.console.log(html)
+		//L.log(html)
 
 		// Insert element first in list.
 		$('#project-list').append(element)
@@ -448,7 +450,7 @@ hyper.UI = {}
 	hyper.UI.displayNumberOfMonitoredFiles = function()
 	{
 		document.querySelector('#files-counter').innerHTML =
-			hyper.SERVER.getNumberOfMonitoredFiles()
+			hyper.MONITOR.getNumberOfMonitoredFiles()
 	}
 
 	hyper.UI.displayProjectList = function()
@@ -480,62 +482,10 @@ hyper.UI = {}
 
 	hyper.UI.deleteEntry = function(obj)
 	{
-		window.console.log($(obj).parent())
+		L.log($(obj).parent())
 		$(obj).parent().remove()
 		updateProjectList()
 	}
-
-	/*
-	//jQueryUI implementation. NOT USED.
-	hyper.UI.askForClientVerification = function(ip)
-	{
-		// Style buttons: http://stackoverflow.com/questions/1828010/apply-css-to-jquery-dialog-buttons
-		var isClosed = false
-		var html = '<div title="Client Connected">'
-        	+ '<p>Allow connection from <strong>' + ip + '</strong>?</p></div>'
-		$(html).dialog(
-		{
-			autoOpen: false,
-			width: 400,
-			open: function()
-			{
-        		$('.ui-dialog-buttonpane')
-        			.find('button:contains("Allow")')
-        				.css('background', 'rgb(0,175,0)')
-        				.css('color', 'rgb(255,255,255)')
-        		$('.ui-dialog-buttonpane')
-        			.find('button:contains("Deny")')
-        				.css('background', 'rgb(175,0,0)')
-        				.css('color', 'rgb(255,255,255)')
-        	},
-			close: function(event, ui)
-			{
-				if (!isClosed)
-				{
-					$(this).remove()
-					hyper.SERVER.blackListIp(ip)
-				}
-			},
-			buttons:
-			{
-				'Allow': function ()
-				{
-					isClosed = true
-					$(this).dialog('close')
-					$(this).remove()
-					hyper.SERVER.whiteListIp(ip)
-				},
-				'Deny': function ()
-				{
-					isClosed = true
-					$(this).dialog('close')
-					$(this).remove()
-					hyper.SERVER.blackListIp(ip)
-				}
-			}
-		}).dialog('open')
-	}
-	*/
 
 	setupUI()
 })()
@@ -544,9 +494,11 @@ hyper.UI = {}
 
 ;(function()
 {
-	var SERVER = require('../server/hyper-server.js')
+	var SERVER = require('../server/hyper-file-server.js')
+	var MONITOR = require('../server/hyper-file-monitor.js')
 
 	hyper.SERVER = SERVER
+	hyper.MONITOR = MONITOR
 
 	var mProjectListFile = './hyper/settings/project-list.json'
 	var mProjectList = []
@@ -554,16 +506,19 @@ hyper.UI = {}
 	var mRunAppGuardFlag = false
 	var mNumberOfConnectedClients = 0
 	var mConnectedCounterTimer = 0
-	var mIpAddressString = null
 
 	function setupServer()
 	{
 		// Start server tasks.
-		SERVER.startServers()
+		SERVER.connectToRemoteServer(hyper.remoteServerURL)
 
-		SERVER.setTraverseNumDirectoryLevels(
+		MONITOR.setTraverseNumDirectoryLevels(
 			SETTINGS.NumberOfDirecoryLevelsToTraverse)
-		SERVER.fileSystemMonitor()
+		MONITOR.fileSystemMonitor(
+			function()
+			{
+				SERVER.reloadApp()
+			})
 
 		// Populate the UI.
 		// TODO: Consider moving these calls to a function in hyper.UI.
@@ -572,66 +527,14 @@ hyper.UI = {}
 		hyper.UI.setServerMessageFun()
 
 		displayServerIpAddress()
-		setInterval(checkServerIpAddressForRestart, 10000)
 
 		SERVER.setClientConnenctedCallbackFun(clientConnectedCallback)
 		SERVER.setReloadCallbackFun(reloadCallback)
-		SERVER.setUnknownIpHandler(hyper.UI.askForClientVerification)
-	}
-
-	// Check IP address and stop and start servers if it has changed.
-	function checkServerIpAddressForRestart()
-	{
-		serverIpAddressDisplayString(function(addressString)
-		{
-			// If address string has changed, then display
-			// the new address and restart servers.
-			if (mIpAddressString != addressString)
-			{
-				mIpAddressString = addressString
-				displayServerIpAddress()
-				SERVER.restartServers()
-			}
-		})
 	}
 
 	function displayServerIpAddress()
 	{
-		serverIpAddressDisplayString(function(addressString)
-		{
-			// Save current address string.
-			mIpAddressString = addressString
-			hyper.UI.displayIpAddress(addressString)
-		})
-	}
-
-	function serverIpAddressDisplayString(callback)
-	{
-		SERVER.getIpAddresses(function(addresses)
-		{
-			var connectAddress = ''
-			var numAddresses = addresses.length
-			if (numAddresses == 0)
-			{
-				connectAddress = '127.0.0.1:' + SETTINGS.WebServerPort
-			}
-			else
-			{
-				if (numAddresses > 1)
-				{
-					connectAddress = 'Try: '
-				}
-				for (var i = 0; i < numAddresses; ++i)
-				{
-					connectAddress += addresses[i] + ':' + SETTINGS.WebServerPort
-					if (i + 1 < numAddresses)
-					{
-						connectAddress += ' or '
-					}
-				}
-			}
-			callback(connectAddress)
-		})
+		hyper.UI.displayIpAddress('Kilroy was here')
 	}
 
 	// The Run button in the UI has been clicked.
@@ -655,7 +558,7 @@ hyper.UI = {}
 			path = mApplicationBasePath + '/' + path
 		}
 
-		window.console.log('runApp: ' + path)
+		L.log('runApp: ' + path)
 
 		SERVER.setAppPath(path)
 
@@ -668,6 +571,7 @@ hyper.UI = {}
 		{
 			// Otherwise, load the requested file on connected clients.
 			SERVER.runApp()
+			MONITOR.setBasePath(SERVER.getBasePath())
 		}
 
 		mNumberOfConnectedClients = 0
@@ -683,7 +587,7 @@ hyper.UI = {}
 		// Open a local browser automatially if no clients are connected.
 		// This is done so that something will happen when you first try
 		// out Hyper by clicking the buttons in the user interface.
-		GUI.Shell.openExternal(SERVER.getAppFileURL())
+		GUI.Shell.openExternal(SERVER.getAppServerURL())
 
 		/* This was used with iframe loading (see hyper-client.html)
 		GUI.Shell.openExternal(
@@ -774,7 +678,7 @@ hyper.UI = {}
 		}
 
 		// Debug logging.
-		window.console.log('Open folder: ' + path)
+		L.log('Open folder: ' + path)
 
 		GUI.Shell.showItemInFolder(path)
 	}
