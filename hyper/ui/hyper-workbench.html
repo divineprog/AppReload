@@ -495,7 +495,7 @@ $(function()
 			return;
 		}
 
-		localStorage.setItem('workbench-window-geometry', JSON.stringify({
+		SETTINGS.setWorkbenchWindowGeometry({
 			x: win.x,
 			y: win.y,
 			width: win.width,
@@ -504,7 +504,7 @@ $(function()
 		)
 
 		var layout = $('body').layout()
-		localStorage.setItem('workbench-divider-position', layout.state.south.size)
+		SETTINGS.getWorkbenchWindowDividerPosition(layout.state.south.size)
 	}
 
 	// Save global reference to function.
@@ -543,7 +543,7 @@ $(function()
 			win.height = data.height
 		}
 
-		var size = localStorage.getItem('workbench-divider-position')
+		var size = SETTINGS.getWorkbenchWindowDividerPosition()
 		if (size)
 		{
 			var layout = $('body').layout()

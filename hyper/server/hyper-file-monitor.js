@@ -23,7 +23,7 @@ limitations under the License.
 /*** Modules used ***/
 
 var FS = require('fs')
-var L = require('./log.js')
+var LOGGER = require('./log.js')
 
 /*** File traversal variables ***/
 
@@ -32,6 +32,7 @@ var mTraverseNumDirecoryLevels = 0
 var mFileCounter = 0
 var mNumberOfMonitoredFiles = 0
 var mBasePath = null
+var mFileSystemChangedCallback
 
 /*** File traversal functions ***/
 
@@ -62,7 +63,7 @@ function getNumberOfMonitoredFiles()
 /**
  * External.
  */
-function fileSystemMonitor(fileSystemChangedCallback)
+function runFileSystemMonitor()
 {
 	mFileCounter = 0
 	var filesUpdated = fileSystemMonitorWorker(
@@ -70,14 +71,19 @@ function fileSystemMonitor(fileSystemChangedCallback)
 		mTraverseNumDirecoryLevels)
 	if (filesUpdated)
 	{
-		fileSystemChangedCallback()
-		setTimeout(fileSystemMonitor, 1000)
+		mFileSystemChangedCallback && mFileSystemChangedCallback()
+		setTimeout(runFileSystemMonitor, 1000)
 	}
 	else
 	{
 		mNumberOfMonitoredFiles = mFileCounter
-		setTimeout(fileSystemMonitor, 500)
+		setTimeout(runFileSystemMonitor, 500)
 	}
+}
+
+function setFileSystemChangedCallbackFun(fun)
+{
+	mFileSystemChangedCallback = fun
 }
 
 /**
@@ -92,7 +98,7 @@ function fileSystemMonitorWorker(path, level)
 		/*var files = FS.readdirSync(path)
 		for (var i in files)
 		{
-			L.log(path + files[i])
+			LOGGER.log(path + files[i])
 		}
 		return false*/
 
@@ -109,16 +115,16 @@ function fileSystemMonitorWorker(path, level)
 					++mFileCounter
 				}
 
-				//L.log('Checking file: ' + files[i] + ': ' + stat.mtime)
+				//LOGGER.log('Checking file: ' + files[i] + ': ' + stat.mtime)
 				if (stat.isFile() && t > mLastReloadTime)
 				{
-					//L.log('***** File has changed ***** ' + files[i])
+					//LOGGER.log('***** File has changed ***** ' + files[i])
 					mLastReloadTime = Date.now()
 					return true
 				}
 				else if (stat.isDirectory() && level > 0)
 				{
-					//L.log('Decending into: ' + path + files[i])
+					//LOGGER.log('Decending into: ' + path + files[i])
 					var changed = fileSystemMonitorWorker(
 						path + files[i] + '/',
 						level - 1)
@@ -127,13 +133,13 @@ function fileSystemMonitorWorker(path, level)
 			}
 			catch (err2)
 			{
-				L.log('ERROR in fileSystemMonitorWorker inner loop: ' + err2)
+				LOGGER.log('ERROR in fileSystemMonitorWorker inner loop: ' + err2)
 			}
 		}
 	}
 	catch(err1)
 	{
-		L.log('ERROR in fileSystemMonitorWorker: ' + err1)
+		LOGGER.log('ERROR in fileSystemMonitorWorker: ' + err1)
 	}
 	return false
 }
@@ -143,4 +149,5 @@ function fileSystemMonitorWorker(path, level)
 exports.setBasePath = setBasePath
 exports.setTraverseNumDirectoryLevels = setTraverseNumDirectoryLevels
 exports.getNumberOfMonitoredFiles = getNumberOfMonitoredFiles
-exports.fileSystemMonitor = fileSystemMonitor
+exports.setFileSystemChangedCallbackFun = setFileSystemChangedCallbackFun
+exports.runFileSystemMonitor = runFileSystemMonitor

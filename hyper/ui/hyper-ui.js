@@ -32,8 +32,7 @@ var PATH = require('path')
 var OS = require('os')
 var GUI = require('nw.gui')
 var FILEUTIL = require('../server/fileutil.js')
-var L = require('../server/log.js')
-require('../server/prepare-settings.js')
+var LOGGER = require('../server/log.js')
 var SETTINGS = require('../settings/settings.js')
 
 /*** Globals ***/
@@ -47,8 +46,6 @@ global.mainHyper = hyper
 
 // UI-related functions.
 hyper.UI = {}
-
-hyper.remoteServerURL = 'http://localhost:4044/'
 
 /*** UI setup ***/
 
@@ -83,7 +80,7 @@ hyper.remoteServerURL = 'http://localhost:4044/'
 			}
 			catch (ex)
 			{
-				L.log('Error creating OS X menubar: ' + ex.message);
+				LOGGER.log('Error creating OS X menubar: ' + ex.message);
 			}
 		}
 	}
@@ -198,7 +195,7 @@ hyper.remoteServerURL = 'http://localhost:4044/'
 			return;
 		}
 
-		localStorage.setItem('project-window-geometry', JSON.stringify({
+		SETTINGS.setProjectWindowGeometry({
 			x: win.x,
 			y: win.y,
 			width: win.width,
@@ -209,11 +206,10 @@ hyper.remoteServerURL = 'http://localhost:4044/'
 
 	function restoreSavedUIState()
 	{
-		var geometry = localStorage.getItem('project-window-geometry')
+		var geometry = SETTINGS.getProjectWindowGeometry()
 		if (geometry)
 		{
 			var win = GUI.Window.get()
-			var data = JSON.parse(geometry)
 
 			// Make sure top-left corner is visible.
 			var offsetY = 0
@@ -221,22 +217,22 @@ hyper.remoteServerURL = 'http://localhost:4044/'
 			{
 				offsetY = 22
 			}
-			data.x = Math.max(data.x, 1)
-			data.y = Math.max(data.y, 1 + offsetY)
-			data.x = Math.min(data.x, screen.width - 100)
-			data.y = Math.min(data.y, screen.height - 200)
+			geometry.x = Math.max(geometry.x, 1)
+			geometry.y = Math.max(geometry.y, 1 + offsetY)
+			geometry.x = Math.min(geometry.x, screen.width - 100)
+			geometry.y = Math.min(geometry.y, screen.height - 200)
 
 			// Set window size.
-			win.x = data.x
-			win.y = data.y
-			win.width = data.width
-			win.height = data.height
+			win.x = geometry.x
+			win.y = geometry.y
+			win.width = geometry.width
+			win.height = geometry.height
 		}
 	}
 
 	function receiveMessage(event)
 	{
-		//L.log('Main got : ' + event.data.message)
+		//LOGGER.log('Main got : ' + event.data.message)
 		if ('eval' == event.data.message)
 		{
 			hyper.SERVER.evalJS(event.data.code)
@@ -284,7 +280,7 @@ hyper.remoteServerURL = 'http://localhost:4044/'
 		// Debug print.
 		/*for (var i = 0; i < files.length; ++i)
 		{
-			L.log(files[i].path);
+			LOGGER.log(files[i].path);
 		}*/
 
 		for (var i = 0; i < files.length; ++i)
@@ -338,7 +334,7 @@ hyper.remoteServerURL = 'http://localhost:4044/'
 		if (!data)
 		{
 			// Return on error, skipping rest of the code.
-			L.log('createProjectEntry failed: ' + path)
+			LOGGER.log('createProjectEntry failed: ' + path)
 			return
 		}
 
@@ -360,7 +356,7 @@ hyper.remoteServerURL = 'http://localhost:4044/'
 
 		// Create element.
 		var element = $(html)
-		//L.log(html)
+		//LOGGER.log(html)
 
 		// Insert element first in list.
 		$('#project-list').append(element)
@@ -482,7 +478,7 @@ hyper.remoteServerURL = 'http://localhost:4044/'
 
 	hyper.UI.deleteEntry = function(obj)
 	{
-		L.log($(obj).parent())
+		LOGGER.log($(obj).parent())
 		$(obj).parent().remove()
 		updateProjectList()
 	}
@@ -507,34 +503,34 @@ hyper.remoteServerURL = 'http://localhost:4044/'
 	var mNumberOfConnectedClients = 0
 	var mConnectedCounterTimer = 0
 
-	function setupServer()
+	hyper.setUpServer = function()
 	{
-		// Start server tasks.
-		SERVER.connectToRemoteServer(hyper.remoteServerURL)
-
-		MONITOR.setTraverseNumDirectoryLevels(
-			SETTINGS.NumberOfDirecoryLevelsToTraverse)
-		MONITOR.fileSystemMonitor(
-			function()
-			{
-				SERVER.reloadApp()
-			})
-
 		// Populate the UI.
 		// TODO: Consider moving these calls to a function in hyper.UI.
 		readProjectList()
 		hyper.UI.displayProjectList()
 		hyper.UI.setServerMessageFun()
 
-		displayServerIpAddress()
-
 		SERVER.setClientConnenctedCallbackFun(clientConnectedCallback)
 		SERVER.setReloadCallbackFun(reloadCallback)
+		SERVER.setStatusCallbackFun(statusCallback)
+
+		MONITOR.setFileSystemChangedCallbackFun(
+			function() { SERVER.reloadApp() })
 	}
 
-	function displayServerIpAddress()
+	hyper.startServer = function()
 	{
-		hyper.UI.displayIpAddress('Kilroy was here')
+		// Start server tasks.
+		SERVER.connectToRemoteServer()
+		MONITOR.setTraverseNumDirectoryLevels(
+			SETTINGS.getNumberOfDirecoryLevelsToTraverse())
+		MONITOR.runFileSystemMonitor()
+	}
+
+	function displayMessage(message)
+	{
+		hyper.UI.displayIpAddress(message)
 	}
 
 	// The Run button in the UI has been clicked.
@@ -558,9 +554,10 @@ hyper.remoteServerURL = 'http://localhost:4044/'
 			path = mApplicationBasePath + '/' + path
 		}
 
-		L.log('runApp: ' + path)
+		LOGGER.log('runApp: ' + path)
 
 		SERVER.setAppPath(path)
+		MONITOR.setBasePath(SERVER.getBasePath())
 
 		if (mNumberOfConnectedClients <= 0)
 		{
@@ -571,7 +568,6 @@ hyper.remoteServerURL = 'http://localhost:4044/'
 		{
 			// Otherwise, load the requested file on connected clients.
 			SERVER.runApp()
-			MONITOR.setBasePath(SERVER.getBasePath())
 		}
 
 		mNumberOfConnectedClients = 0
@@ -607,16 +603,16 @@ hyper.remoteServerURL = 'http://localhost:4044/'
 		mConnectedCounterTimer = setTimeout(function() {
 			hyper.UI.setConnectedCounter(mNumberOfConnectedClients) },
 			1000)
-
-		// Update ip address in the UI to the actual ip used by the server.
-		SERVER.getIpAddress(function(address) {
-			hyper.UI.displayIpAddress(address + ':' + SETTINGS.WebServerPort)
-		})
 	}
 
 	function reloadCallback()
 	{
 		mNumberOfConnectedClients = 0
+	}
+
+	function statusCallback(message)
+	{
+		displayMessage(message)
 	}
 
 	function readProjectList()
@@ -678,7 +674,7 @@ hyper.remoteServerURL = 'http://localhost:4044/'
 		}
 
 		// Debug logging.
-		L.log('Open folder: ' + path)
+		LOGGER.log('Open folder: ' + path)
 
 		GUI.Shell.showItemInFolder(path)
 	}
@@ -695,8 +691,16 @@ hyper.remoteServerURL = 'http://localhost:4044/'
 		openFolder(path)
 	}
 
+	hyper.setUserKey = function(key)
+	{
+		SERVER.setUserKey(key)
+	}
+
+	hyper.setRemoteServerURL = function(url)
+	{
+		SERVER.setRemoteServerURL(url)
+	}
+
 	// Display Node.js version info. Not used.
 	//document.querySelector('#info').innerHTML = 'node.js ' + process.version
-
-	setupServer()
 })()

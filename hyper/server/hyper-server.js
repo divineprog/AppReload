@@ -30,7 +30,7 @@ var PATH = require('path')
 var SOCKETIO = require('socket.io')
 var FILEUTIL = require('./fileutil.js')
 var WEBSERVER = require('./webserver')
-var L = require('./log.js')
+var LOGGER = require('./log.js')
 
 /*********************************/
 /***     Global variables      ***/
@@ -61,13 +61,13 @@ function main()
 
 function startServers()
 {
-	L.log('Start servers')
+	LOGGER.log('Start servers')
 
 	mWebServer = createWebServer()
-	L.log('Web server started')
+	LOGGER.log('Web server started')
 
 	createSocketIoServer(mWebServer.getHTTPServer())
-	L.log('Socket.io server started')
+	LOGGER.log('Socket.io server started')
 }
 
 function createWebServer()
@@ -82,7 +82,7 @@ function createWebServer()
 
 function createSocketIoServer(httpServer)
 {
-	L.log('Start socket.io server')
+	LOGGER.log('Start socket.io server')
 
 	mIO = SOCKETIO(httpServer)
 
@@ -90,14 +90,14 @@ function createSocketIoServer(httpServer)
 	mIO.on('connection', function(socket)
 	{
 		// Debug logging.
-		L.log('socket.io client connected')
+		//LOGGER.log('socket.io client connected')
 
 		// ****** Disconnect ******
 
 		socket.on('disconnect', function ()
 		{
 			// Debug logging.
-			L.log('socket.io client disconnected')
+			//LOGGER.log('socket.io client disconnected')
 		})
 
 		// ****** Messages from the workbench client ******
@@ -105,7 +105,7 @@ function createSocketIoServer(httpServer)
 		socket.on('hyper.workbench-connected', function(data)
 		{
 			// Debug logging.
-			L.log('hyper.workbench-connected')
+			LOGGER.log('hyper.workbench-connected')
 
 			// Join room.
 			var key = data.key
@@ -115,8 +115,9 @@ function createSocketIoServer(httpServer)
 
 		socket.on('hyper.resource-response', function(data)
 		{
-			// Debug logging.
-			L.log('hyper.resource-response')
+			// Got data from the workbench, pass it on
+			// to the client using the callback function,
+			// then delete the callback.
 			mResourseRequestCallbacks[data.id](data)
 			delete mResourseRequestCallbacks[data.id]
 		})
@@ -130,7 +131,6 @@ function createSocketIoServer(httpServer)
 
 		socket.on('hyper.reload', function(data)
 		{
-	L.log('server hyper.reload')
 			// Pass reload command to mobile clients.
 			var room = 'client-' + data.key
 			mIO.to(room).emit('hyper.reload', {})
@@ -138,8 +138,6 @@ function createSocketIoServer(httpServer)
 
 		socket.on('hyper.eval', function(data)
 		{
-
-	L.log('server hyper.eval: ' + data.code)
 			// Pass code to eval to mobile clients.
 			var room = 'client-' + data.key
 			mIO.to(room).emit('hyper.eval', data.code)
@@ -150,12 +148,16 @@ function createSocketIoServer(httpServer)
 		socket.on('hyper.client-connected', function(data)
 		{
 			// Debug logging.
-			L.log('hyper.client-connected')
+			//LOGGER.log('hyper.client-connected')
 
 			// Join room.
 			var key = data.key
 			var room = 'client-' + key
 			socket.join(room)
+
+			// Tell the workbench that a client has connected.
+			var room = 'workbench-' + key
+			mIO.to(room).emit('hyper.client-connected', data.key)
 		})
 
 		socket.on('hyper.log', function(data)
@@ -177,8 +179,39 @@ function createSocketIoServer(httpServer)
 // Path format: /hyper/<key>/<request>
 function webServerHookFunction(request, response, path)
 {
-	L.log('webServerHookFunction: ' + path)
+	//LOGGER.log('webServerHookFunction: ' + path)
 
+	// Get platform string value.
+	var platform = getPlatformFromRequest(request)
+
+	// Get the key and request element.
+	var requestElements = getRequestElements(path)
+
+	if (requestElements && isHyperRequest(requestElements.hyper))
+	{
+		// Send request for file to workbench.
+		requestResourse(
+			requestElements.request,
+			platform,
+			requestElements.key,
+			response)
+	}
+	else
+	{
+		// TODO: This should be an error (404)?
+		LOGGER.log('*** Other Request: ' + path)
+		mWebServer.writeRespose(
+			response,
+			'Other Request: ' + path,
+			'text/html')
+	}
+
+	// Return true to tell web server no further processing should be done.
+	return true
+}
+
+function getPlatformFromRequest(request)
+{
 	// Platform flags (boolean values).
 	var userAgent = request['headers']['user-agent']
 	var isAndroid = userAgent.indexOf('Android') > 0
@@ -194,28 +227,7 @@ function webServerHookFunction(request, response, path)
 	platform = isIOS && 'ios'
 	platform = isWP && 'wp'
 
-	var requestElements = getRequestElements(path)
-
-	if (requestElements && isHyperRequest(requestElements.hyper))
-	{
-		// Send request for file to workbench.
-		requestResourse(
-			requestElements.request,
-			platform,
-			requestElements.key,
-			response)
-	}
-	else
-	{
-		L.log('*** Other Request: ' + path)
-		mWebServer.writeRespose(
-			response,
-			'Other Request: ' + path,
-			'text/html')
-	}
-
-	// Return true to tell web server no further processing should be done.
-	return true
+	return platform
 }
 
 function requestResourse(path, platform, key, response)
@@ -233,12 +245,12 @@ function requestResourse(path, platform, key, response)
 		}
 	var room = 'workbench-' + key
 	mIO.to(room).emit('hyper.resource-request', data)
-	L.log('sent hyper.resource-request to ' + room + ' : ' + path)
+	//LOGGER.log('sent hyper.resource-request to ' + room + ' : ' + path)
 
 	mResourseRequestCallbacks[mResourseRequestCounter] =
 		function(data)
 		{
-			L.log('writing response for hyper.resource-request' + ' : ' + path)
+			//LOGGER.log('writing response for hyper.resource-request' + ' : ' + path)
 			// Send result to client.
 			// TODO: Handle error pages.
 			mWebServer.writeRespose(

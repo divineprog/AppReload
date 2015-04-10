@@ -31,19 +31,21 @@ var SOCKETIO_CLIENT = require('socket.io-client')
 var FILEUTIL = require('./fileutil.js')
 var SETTINGS = require('../settings/settings.js')
 var LOADER = require('./resource-loader.js')
-var L = require('./log.js')
+var LOGGER = require('./log.js')
 
 /*********************************/
 /***     Server variables      ***/
 /*********************************/
 
-var mUserKey = 'MyKey'
+var mUserKey = 'DefaultUserKey'
+var mRemoteServerURL = 'http://localhost:4044'
 var mSocket
 var mAppPath
 var mAppFile
 var mMessageCallback
 var mClientConnectedCallback
 var mReloadCallback
+var mStatusCallback
 
 // The current base directory. Must NOT end with a slash.
 var mBasePath = ''
@@ -52,12 +54,12 @@ var mBasePath = ''
 /***     Server functions      ***/
 /*********************************/
 
-function connectToRemoteServer(url)
+function connectToRemoteServer()
 {
-	L.log('creating socket')
+	LOGGER.log('Connecting to remote server')
 
 	// Create socket.
-	var socket = SOCKETIO_CLIENT(url)
+	var socket = SOCKETIO_CLIENT(mRemoteServerURL)
 
 	// Global reference
 	mSocket = socket
@@ -71,18 +73,19 @@ function connectToRemoteServer(url)
 			{
 				key: mUserKey
 			})
+
+		mStatusCallback && mStatusCallback('Connected')
 	})
 
 	socket.on('disconnect', function ()
 	{
-		// Debug logging.
-		L.log('Disconnected from remote server')
+		mStatusCallback && mStatusCallback('Disconnected')
 	})
 
 	// Get resource function.
 	socket.on('hyper.resource-request', function(data)
 	{
-		L.log('hyper.resource-request: ' + data.path)
+		//LOGGER.log('hyper.resource-request: ' + data.path)
 		var response = serveResource(data.platform, data.path)
 		socket.emit(
 			'hyper.resource-response',
@@ -93,12 +96,8 @@ function connectToRemoteServer(url)
 			})
 	})
 
-
 	socket.on('hyper.client-connected', function(data)
 	{
-		// Debug logging.
-		L.log('hyper.client-connected')
-
 		// Notify UI callback that a client has connected.
 		mClientConnectedCallback && mClientConnectedCallback()
 	})
@@ -111,9 +110,6 @@ function connectToRemoteServer(url)
 
 	socket.on('hyper.result', function(data)
 	{
-		//L.log('data result type: ' + (typeof data))
-		//L.log('data result : ' + data)
-
 		// Functions cause a cloning error, just send the type.
 		if (typeof data == 'function')
 		{
@@ -129,7 +125,7 @@ function connectToRemoteServer(url)
  */
 function serveResource(platform, path)
 {
-	L.log('serveResource: ' + path)
+	//LOGGER.log('serveResource: ' + path)
 
 	if (path == '/')
 	{
@@ -140,7 +136,7 @@ function serveResource(platform, path)
 	{
 		return serveReloaderScript()
 	}
-	else if (SETTINGS.ServeCordovaJsFiles &&
+	else if (SETTINGS.getServeCordovaJsFiles() &&
 		(path == '/cordova.js' ||
 		path == '/cordova_plugins.js' ||
 		path.indexOf('/plugins/') == 0))
@@ -149,7 +145,6 @@ function serveResource(platform, path)
 	}
 	else if (mBasePath && FILEUTIL.fileIsHTML(path))
 	{
-		// mBasePath is added in serveHtmlFileWithScriptInjection.
 		return serveHtmlFileWithScriptInjection(mBasePath + path.substr(1))
 	}
 	else if (mBasePath)
@@ -170,7 +165,6 @@ function serveResource(platform, path)
  */
 function serveRootRequest()
 {
-L.log('serveReloaderScript')
 	// Set the app path so that the server/ui directory can be accessed.
 	setAppPath(process.cwd() + '/hyper/server/hyper-connect.html')
 
@@ -185,7 +179,6 @@ L.log('serveReloaderScript')
  */
 function serveReloaderScript()
 {
-L.log('serveReloaderScript')
 	var script = FILEUTIL.readFileSync('./hyper/server/hyper-reloader.js')
 	script = script.replace(
 		'__USER_KEY_INSERTED_BY_SERVER__',
@@ -327,7 +320,7 @@ function createReloaderScriptTags()
 {
 	return ''
 		+ '<script src="/socket.io/socket.io.js"></script>'
-		+ '<script src="/hyper/MyKey/hyper.reloader"></script>'
+		+ '<script src="/hyper/' + mUserKey + '/hyper.reloader"></script>'
 }
 
 /**
@@ -434,7 +427,7 @@ function getBasePath()
  */
 function getAppServerURL()
 {
-	return 'http://localhost:4044/hyper/MyKey/' + mAppFile
+	return mRemoteServerURL + '/hyper/' + mUserKey + '/' + mAppFile
 }
 
 /**
@@ -442,7 +435,7 @@ function getAppServerURL()
  */
 function getServerBaseURL()
 {
-	return 'http://localhost:4044/hyper/MyKey/'
+	return mRemoteServerURL + '/hyper/' + mUserKey + '/'
 }
 
 /**
@@ -471,7 +464,7 @@ function reloadApp()
  */
 function evalJS(code)
 {
-	L.log('emit eval: ' + code)
+	LOGGER.log('emit eval: ' + code)
 	mSocket.emit('hyper.eval', { key: mUserKey, code: code })
 }
 
@@ -505,6 +498,32 @@ function setReloadCallbackFun(fun)
 	mReloadCallback = fun
 }
 
+/**
+ * External.
+ *
+ * Callback form: fun(message)
+ */
+function setStatusCallbackFun(fun)
+{
+	mStatusCallback = fun
+}
+
+/**
+ * External.
+ */
+function setUserKey(key)
+{
+	mUserKey = key
+}
+
+/**
+ * External.
+ */
+function setRemoteServerURL(url)
+{
+	mRemoteServerURL = url
+}
+
 /*********************************/
 /***	  Module exports	   ***/
 /*********************************/
@@ -520,6 +539,9 @@ exports.reloadApp = reloadApp
 exports.evalJS = evalJS
 exports.setMessageCallbackFun = setMessageCallbackFun
 exports.setClientConnenctedCallbackFun = setClientConnenctedCallbackFun
+exports.setStatusCallbackFun = setStatusCallbackFun
 exports.setReloadCallbackFun = setReloadCallbackFun
 exports.serveResource = serveResource
 exports.connectToRemoteServer = connectToRemoteServer
+exports.setUserKey = setUserKey
+exports.setRemoteServerURL = setRemoteServerURL
