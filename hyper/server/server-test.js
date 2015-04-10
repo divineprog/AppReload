@@ -1,5 +1,5 @@
 var ASSERT = require('assert')
-
+console.log(Math.floor(2.9))
 // ------------------------------------------------
 
 var LOADER = require('./resource-loader.js')
@@ -24,5 +24,5 @@ ASSERT.equal(result.resultCode, 200)
 var result = SERVER.serveResource('ios', '/cordova.js')
 ASSERT.equal(result.resultCode, 200)
 
-SERVER.connectToRemoteServer('http://localhost:4044')
+//SERVER.connectToRemoteServer('http://localhost:4044')
 

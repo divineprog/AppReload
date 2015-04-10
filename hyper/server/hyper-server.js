@@ -44,6 +44,7 @@ var mIO_ClientSockets = []
 var mIO_WorkbenchSockets = []
 var mResourseRequestCounter = 1
 var mResourseRequestCallbacks = {}
+var mUserKeys = {}
 
 /*********************************/
 /***       Main function       ***/
@@ -107,10 +108,15 @@ function createSocketIoServer(httpServer)
 			// Debug logging.
 			LOGGER.log('hyper.workbench-connected')
 
+			// Generate key (session lifetime).
+			var key = generateUserKey()
+
 			// Join room.
-			var key = data.key
 			var room = 'workbench-' + key
 			socket.join(room)
+
+			// Send key to workbench.
+			mIO.to(room).emit('hyper.user-key', { key: key })
 		})
 
 		socket.on('hyper.resource-response', function(data)
@@ -282,6 +288,19 @@ function getRequestElements(path)
 	var part3 = path.substring(slash3)
 
 	return { hyper: part1, key: part2, request: part3 }
+}
+
+// TODO: Make safe key generation/exchange.
+function generateUserKey()
+{
+	var chars = 'abcdefghijklmnopqrstuvwxyz0123456789'
+	var key = ''
+	for (var i = 0; i < 4; ++i)
+	{
+		var index = Math.floor(Math.random() * chars.length)
+		key += chars[index]
+	}
+	return key
 }
 
 /*

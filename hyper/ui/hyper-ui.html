@@ -66,6 +66,7 @@ License: Apache Version 2.0
 						</div>
 
 						<div class="modal-body">
+							<!--
 							<div class="form-group">
 								<label for="input-connect-key">Connect Key:</label>
 								<input type="text"
@@ -73,6 +74,7 @@ License: Apache Version 2.0
 									class="form-control"
 									placeholder="Enter connect key"/>
 							</div>
+							-->
 
 							<div class="form-group">
 								<label for="input-connect-url">Server URL:</label>
@@ -212,8 +214,8 @@ License: Apache Version 2.0
 
 		window.setConnectKeyAndConnect = function()
 		{
-			var key = $('#input-connect-key').val()
-			hyper.setUserKey(key)
+			//var key = $('#input-connect-key').val()
+			//hyper.setUserKey(key)
 			var url = $('#input-connect-url').val()
 			hyper.setRemoteServerURL(url)
 			hyper.startServer()

@@ -71,15 +71,20 @@ function connectToRemoteServer()
 		socket.emit(
 			'hyper.workbench-connected',
 			{
-				key: mUserKey
+				// Key is sent from server.
+				//key: mUserKey
 			})
-
-		mStatusCallback && mStatusCallback('Connected')
 	})
 
-	socket.on('disconnect', function ()
+	socket.on('disconnect', function()
 	{
 		mStatusCallback && mStatusCallback('Disconnected')
+	})
+
+	socket.on('hyper.user-key', function(data)
+	{
+		mUserKey = data.key
+		mStatusCallback && mStatusCallback('Connected Key: ' + mUserKey)
 	})
 
 	// Get resource function.
@@ -464,7 +469,6 @@ function reloadApp()
  */
 function evalJS(code)
 {
-	LOGGER.log('emit eval: ' + code)
 	mSocket.emit('hyper.eval', { key: mUserKey, code: code })
 }
 
@@ -511,10 +515,12 @@ function setStatusCallbackFun(fun)
 /**
  * External.
  */
+/*
 function setUserKey(key)
 {
 	mUserKey = key
 }
+*/
 
 /**
  * External.
@@ -543,5 +549,5 @@ exports.setStatusCallbackFun = setStatusCallbackFun
 exports.setReloadCallbackFun = setReloadCallbackFun
 exports.serveResource = serveResource
 exports.connectToRemoteServer = connectToRemoteServer
-exports.setUserKey = setUserKey
+//exports.setUserKey = setUserKey
 exports.setRemoteServerURL = setRemoteServerURL

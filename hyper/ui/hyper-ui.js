@@ -201,7 +201,6 @@ hyper.UI = {}
 			width: win.width,
 			height: win.height
 			})
-		)
 	}
 
 	function restoreSavedUIState()
@@ -691,10 +690,12 @@ hyper.UI = {}
 		openFolder(path)
 	}
 
+	/*
 	hyper.setUserKey = function(key)
 	{
 		SERVER.setUserKey(key)
 	}
+	*/
 
 	hyper.setRemoteServerURL = function(url)
 	{
