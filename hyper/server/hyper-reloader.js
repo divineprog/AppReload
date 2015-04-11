@@ -112,8 +112,9 @@ window.hyper = (function(hyper, userKey)
 				// Show the loading toast.
 				hyper.showMessage('Loading')
 
+				// Variable data is the url.
 				setTimeout(function() {
-					window.location.replace(data.url) },
+					window.location.replace(data) },
 					300)
 			}
 		})
@@ -133,9 +134,10 @@ window.hyper = (function(hyper, userKey)
 		})
 		socket.on('hyper.eval', function(data)
 		{
-			console.log('client eval: ' + data)
+			//console.log('client eval: ' + data)
 			try
 			{
+				// Variable data is JS code to eval.
 				var result = eval(data)
 				hyper.sendJsResult(result)
 			}

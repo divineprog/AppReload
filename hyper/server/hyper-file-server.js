@@ -38,7 +38,7 @@ var LOGGER = require('./log.js')
 /*********************************/
 
 var mUserKey = 'DefaultUserKey'
-var mRemoteServerURL = 'http://localhost:4044'
+var mRemoteServerURL = ''
 var mSocket
 var mAppPath
 var mAppFile
@@ -154,6 +154,7 @@ function serveResource(platform, path)
 	}
 	else if (mBasePath)
 	{
+		//LOGGER.log('place 2: ' + mBasePath + path.substr(1))
 		return LOADER.readResource(mBasePath + path.substr(1))
 	}
 	else
@@ -450,7 +451,7 @@ function getServerBaseURL()
  */
 function runApp()
 {
-	mSocket.emit('hyper.run', { key: mUserKey, url: getAppFileURL() })
+	mSocket.emit('hyper.run', { key: mUserKey, url: getAppServerURL() })
 }
 
 /**

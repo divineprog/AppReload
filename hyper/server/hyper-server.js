@@ -95,10 +95,10 @@ function createSocketIoServer(httpServer)
 
 		// ****** Disconnect ******
 
-		socket.on('disconnect', function ()
+		socket.on('disconnect', function()
 		{
 			// Debug logging.
-			//LOGGER.log('socket.io client disconnected')
+			LOGGER.log('Disconnected ' + socket.__agent_type__)
 		})
 
 		// ****** Messages from the workbench client ******
@@ -106,7 +106,9 @@ function createSocketIoServer(httpServer)
 		socket.on('hyper.workbench-connected', function(data)
 		{
 			// Debug logging.
-			LOGGER.log('hyper.workbench-connected')
+			LOGGER.log('Workbench connected')
+
+			socket.__agent_type__ = 'workbench'
 
 			// Generate key (session lifetime).
 			var key = generateUserKey()
@@ -132,6 +134,7 @@ function createSocketIoServer(httpServer)
 		{
 			// Pass URL to run to mobile clients.
 			var room = 'client-' + data.key
+			//LOGGER.log('hyper.run url: ' + data.url)
 			mIO.to(room).emit('hyper.run', data.url)
 		})
 
@@ -154,7 +157,9 @@ function createSocketIoServer(httpServer)
 		socket.on('hyper.client-connected', function(data)
 		{
 			// Debug logging.
-			//LOGGER.log('hyper.client-connected')
+			LOGGER.log('Mobile client connected')
+
+			socket.__agent_type__ = 'mobile client'
 
 			// Join room.
 			var key = data.key
@@ -250,8 +255,8 @@ function requestResourse(path, platform, key, response)
 		path: path
 		}
 	var room = 'workbench-' + key
-	mIO.to(room).emit('hyper.resource-request', data)
 	//LOGGER.log('sent hyper.resource-request to ' + room + ' : ' + path)
+	mIO.to(room).emit('hyper.resource-request', data)
 
 	mResourseRequestCallbacks[mResourseRequestCounter] =
 		function(data)

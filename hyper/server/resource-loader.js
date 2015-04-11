@@ -22,13 +22,14 @@ limitations under the License.
 
 var FS = require('fs')
 var PATH = require('path')
-var L = require('./log.js')
+var LOGGER = require('./log.js')
 
 // Mime type table.
 var mMimeTypes = getDefaultMimeTypes()
 
 function readResource(path)
 {
+	//LOGGER.log('readResource path: ' + path)
 	var file = getFileStatus(path)
 	if (!file)
 	{
@@ -100,7 +101,7 @@ function getFileStatus(fullPath)
 	}
 	catch (ex)
 	{
-		L.log('GetFileStatus exception: ' + ex)
+		LOGGER.log('resource-loader.js: getFileStatus exception: ' + ex)
 		return null
 	}
 }
