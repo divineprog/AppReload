@@ -8,10 +8,10 @@ HyperReload.app
 .DS_store
 
 # HyperReload project list file
-project-list.json
+#project-list.json
 
 # HyperReload settings file
-hyper/settings/settings.js
+#hyper/settings/settings.js
 
 # Local build settings
 localConfig.rb
