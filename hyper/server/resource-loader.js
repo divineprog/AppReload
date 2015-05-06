@@ -27,13 +27,14 @@ var LOGGER = require('./log.js')
 // Mime type table.
 var mMimeTypes = getDefaultMimeTypes()
 
-function readResource(path)
+// Returns a response object.
+function response(path, ifModifiedSince)
 {
-	//LOGGER.log('readResource path: ' + path)
+	//LOGGER.log('response path: ' + path)
 	var file = getFileStatus(path)
 	if (!file)
 	{
-		return fileNotFoundResponse(path)
+		return createResponse404(path)
 	}
 
 	if (file.isDirectory())
@@ -48,48 +49,71 @@ function readResource(path)
 		var indexFile = getFileStatus(path)
 		if (!indexFile)
 		{
-			return fileNotFoundResponse(path)
+			return createResponse404(path)
 		}
 	}
 	else if (!file.isFile())
 	{
-		return fileNotFoundResponse(path)
+		return createResponse404(path)
 	}
 
-	// Return file data object.
-	return fileResponse(path)
+	// Return response object.
+	return fileResponse(path, ifModifiedSince)
 }
 
-function fileResponse(fullPath)
+function fileResponse(fullPath, ifModifiedSince)
 {
 	var contentType = getContentType(fullPath)
 	var data = FS.readFileSync(fullPath)
-	return createResponse(data, contentType)
+	var stat = FS.statSync(fullPath)
+	return createResponse(data, mtime, contentType, ifModifiedSince)
 }
 
-function fileNotFoundResponse(path)
+function createResponse(data, mtime, contentType, ifModifiedSince)
 {
-	var data = 'File Not Found: ' + path
-	return createErrorResponse(data)
+	// If resource is not updated send 304.
+	if (ifModifiedSince)
+	{
+		var ifModifiedSinceTime = new Date(ifModifiedSince).getTime()
+		var modifiedTime = mtime.getTime()
+		if (modifiedTime <= ifModifiedSinceTime)
+		{
+			return createResponse304()
+		}
+	}
+
+	// Otherwise send 200 OK.
+	return createResponse200(
+		data,
+		mtime,
+		contentType)
 }
 
-function createResponse(data, contentType)
+function createResponse200(data, mtime, contentType)
 {
 	return {
 		resultCode: 200, // OK
 		contentType: contentType,
 		content: data,
-		contentLength: data.length
+		contentLength: data.length,
+		lastModified: mtime.toUTCString()
 	}
 }
 
-function createErrorResponse(data)
+function createResponse304()
+{
+	return {
+		resultCode: 304 // Not modified
+	}
+}
+
+function createResponse404(path)
 {
 	return {
 		resultCode: 404, // Not found
 		contentType: 'text/html',
-		content: data,
-		contentLength: data.length
+		content: path,
+		contentLength: path.length
 	}
 }
 
@@ -544,6 +568,6 @@ function getDefaultMimeTypes()
 
 // Exported functions.
 
-exports.readResource = readResource
+exports.response = response
 exports.createResponse = createResponse
-exports.createErrorResponse = createErrorResponse
+exports.createResponse404 = createResponse404

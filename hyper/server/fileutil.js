@@ -37,6 +37,18 @@ exports.readFileSync = function(path, options)
 	}
 }
 
+exports.statSync = function(path)
+{
+	try
+	{
+		return FS.statSync(path)
+	}
+	catch (err)
+	{
+		return null
+	}
+}
+
 exports.isPathAbsolute = function(path)
 {
 	// Check for Linux/OS X and Windows.

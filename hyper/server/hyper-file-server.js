@@ -91,7 +91,10 @@ function connectToRemoteServer()
 	socket.on('hyper.resource-request', function(data)
 	{
 		//LOGGER.log('hyper.resource-request: ' + data.path)
-		var response = serveResource(data.platform, data.path)
+		var response = serveResource(
+			data.platform,
+			data.path,
+			data.ifModifiedSince)
 		socket.emit(
 			'hyper.resource-response',
 			{
@@ -128,7 +131,7 @@ function connectToRemoteServer()
 /**
  * Internal.
  */
-function serveResource(platform, path)
+function serveResource(platform, path, ifModifiedSince)
 {
 	//LOGGER.log('serveResource: ' + path)
 
@@ -139,23 +142,27 @@ function serveResource(platform, path)
 	}
 	else if (path == '/hyper.reloader')
 	{
-		return serveReloaderScript()
+		return serveReloaderScript(ifModifiedSince)
 	}
 	else if (SETTINGS.getServeCordovaJsFiles() &&
 		(path == '/cordova.js' ||
 		path == '/cordova_plugins.js' ||
 		path.indexOf('/plugins/') == 0))
 	{
-		return serveCordovaFile(platform, path)
+		return serveCordovaFile(platform, path, ifModifiedSince)
 	}
 	else if (mBasePath && FILEUTIL.fileIsHTML(path))
 	{
-		return serveHtmlFileWithScriptInjection(mBasePath + path.substr(1))
+		return serveHtmlFileWithScriptInjection(
+			mBasePath + path.substr(1),
+			ifModifiedSince)
 	}
 	else if (mBasePath)
 	{
 		//LOGGER.log('place 2: ' + mBasePath + path.substr(1))
-		return LOADER.readResource(mBasePath + path.substr(1))
+		return LOADER.response(
+			mBasePath + path.substr(1),
+			ifModifiedSince)
 	}
 	else
 	{
@@ -175,7 +182,7 @@ function serveRootRequest()
 	setAppPath(process.cwd() + '/hyper/server/hyper-connect.html')
 
 	// Always serve the connect page for the root url.
-	return serveHtmlFile('./hyper/server/hyper-connect.html')
+	return serveHtmlFile('./hyper/server/hyper-connect.html', null)
 }
 
 /**
@@ -183,13 +190,26 @@ function serveRootRequest()
  *
  * Serve reloader script.
  */
-function serveReloaderScript()
+function serveReloaderScript(ifModifiedSince)
 {
-	var script = FILEUTIL.readFileSync('./hyper/server/hyper-reloader.js')
-	script = script.replace(
-		'__USER_KEY_INSERTED_BY_SERVER__',
-		mUserKey)
-	return LOADER.createResponse(script, 'application/javascript')
+	var path = './hyper/server/hyper-reloader.js'
+	var script = FILEUTIL.readFileSync(path)
+	var stat = FILEUTIL.statSync(path)
+	if (script && stat)
+	{
+		script = script.replace(
+			'__USER_KEY_INSERTED_BY_SERVER__',
+			mUserKey)
+		return LOADER.createResponse(
+			script,
+			stat.mtime,
+			'application/javascript',
+			ifModifiedSince)
+	}
+	else
+	{
+		return LOADER.createResponse404(path)
+	}
 }
 
 /**
@@ -197,9 +217,9 @@ function serveReloaderScript()
  *
  * Serve HTML file. Will insert reloader script.
  */
-function serveHtmlFileWithScriptInjection(filePath)
+function serveHtmlFileWithScriptInjection(filePath, ifModifiedSince)
 {
-	return serveHtmlFile(filePath)
+	return serveHtmlFile(filePath, ifModifiedSince)
 }
 
 /**
@@ -208,17 +228,22 @@ function serveHtmlFileWithScriptInjection(filePath)
  * If file exists, serve it and return true, otherwise return false.
  * Insert the reloader script if file exists.
  */
-function serveHtmlFile(path)
+function serveHtmlFile(path, ifModifiedSince)
 {
 	var html = FILEUTIL.readFileSync(path)
-	if (html)
+	var stat = FILEUTIL.statSync(path)
+	if (html && stat)
 	{
 		var data = insertReloaderScript(html)
-		return LOADER.createResponse(data, 'text/html')
+		return LOADER.createResponse(
+			data,
+			stat.mtime,
+			'text/html',
+			ifModifiedSince)
 	}
 	else
 	{
-		return LOADER.createErrorResponse('File not found: ' + path)
+		return LOADER.createResponse404(path)
 	}
 }
 
@@ -229,10 +254,10 @@ function serveHtmlFile(path)
  */
 function serveFileOrNull(path)
 {
-	var result = LOADER.readResource(path)
-	if (200 == result.resultCode)
+	var response = LOADER.response(path)
+	if (200 == response.resultCode)
 	{
-		return result
+		return response
 	}
 	else
 	{
@@ -313,8 +338,7 @@ function serveCordovaFile(platform, path)
 			serveFileOrNull(wpCordovaLibPath)
 	}
 
-	return cordovaJsFile ||
-		LOADER.createErrorResponse('File not found: ' + path)
+	return cordovaJsFile || LOADER.createResponse404(path)
 }
 
 /**

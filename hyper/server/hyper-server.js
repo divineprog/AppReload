@@ -202,19 +202,17 @@ function webServerHookFunction(request, response, path)
 	{
 		// Send request for file to workbench.
 		requestResourse(
+			request,
+			response,
 			requestElements.request,
 			platform,
-			requestElements.key,
-			response)
+			requestElements.key)
 	}
 	else
 	{
-		// TODO: This should be an error (404)?
+		// If not recognised, send 404.
 		LOGGER.log('*** Other Request: ' + path)
-		mWebServer.writeRespose(
-			response,
-			'Other Request: ' + path,
-			'text/html')
+		mWebServer.writeResponse404(response, path)
 	}
 
 	// Return true to tell web server no further processing should be done.
@@ -241,33 +239,54 @@ function getPlatformFromRequest(request)
 	return platform
 }
 
-function requestResourse(path, platform, key, response)
+function requestResourse(request, response, path, platform, key)
 {
-	// Get socket.io connection for key.
-
-	// Send request and wait for result.
-	// TODO: Use room or namespace for key.
+	// Setup request data.
 	++mResourseRequestCounter
 	var data = {
 		id: mResourseRequestCounter,
 		key: key,
 		platform: platform,
-		path: path
-		}
+		path: path,
+		ifModifiedSince: request.headers['if-modified-since']
+	}
+
+	// Send async request.
 	var room = 'workbench-' + key
 	//LOGGER.log('sent hyper.resource-request to ' + room + ' : ' + path)
 	mIO.to(room).emit('hyper.resource-request', data)
 
+	// Response callback for async result.
 	mResourseRequestCallbacks[mResourseRequestCounter] =
 		function(data)
 		{
 			//LOGGER.log('writing response for hyper.resource-request' + ' : ' + path)
+
 			// Send result to client.
-			// TODO: Handle error pages.
-			mWebServer.writeRespose(
-				response,
-				data.response.content,
-				data.response.contentType)
+			if (200 == data.response.resultCode)
+			{
+				mWebServer.writeResponse200(
+					response,
+					data.response.content,
+					data.response.contentType,
+					data.response.lastModified)
+			}
+			else if (304 == data.response.resultCode)
+			{
+				mWebServer.writeResponse304(response)
+			}
+			else if (404 == data.response.resultCode)
+			{
+				mWebServer.writeResponse404(
+					response,
+					data.response.content)
+			}
+			else
+			{
+				mWebServer.writeResponse404(
+					response,
+					'unknown request')
+			}
 		}
 }
 
@@ -297,6 +316,17 @@ function getRequestElements(path)
 
 // TODO: Make safe key generation/exchange.
 function generateUserKey()
+{
+	var key = generateKey()
+	while (mUserKeys[key])
+	{
+		key = generateKey()
+	}
+	mUserKeys[key] = key
+	return key
+}
+
+function generateKey()
 {
 	var chars = 'abcdefghijklmnopqrstuvwxyz0123456789'
 	var key = ''

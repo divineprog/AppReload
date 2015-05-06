@@ -18,14 +18,14 @@ server.create()
 server.start(port)
 server.getIpAddress(function(address)
 {
-	window.console.log(
+	LOGGER.log(
 		'Web server running at:\n' +
 		'http://' + address + ':' + port)
 })
 
 License:
 
-Copyright (c) 2013-2014 Mikael Kindborg
+Copyright (c) 2013-2015 Mikael Kindborg
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -45,8 +45,9 @@ var URL = require('url')
 var NET = require('net')
 var FS = require('fs')
 var OS = require('os')
-// TODO: Not used, remove: var PATH = require('path')
+// Not used: var PATH = require('path')
 var DNS = require('dns')
+var LOGGER = require('./log.js')
 
 // Global Mime type table.
 var MimeTypes = GetDefaultMimeTypes()
@@ -108,7 +109,7 @@ function CreateServerObject()
 		}
 		catch (error)
 		{
-			window.console.log('Could not create webserver: ' + error)
+			LOGGER.log('Could not create webserver: ' + error)
 			return null
 		}
 	}
@@ -124,7 +125,7 @@ function CreateServerObject()
 		}
 		catch (error)
 		{
-			window.console.log('Could not start webserver: ' + error)
+			LOGGER.log('Could not start webserver: ' + error)
 		}
 	}
 
@@ -139,7 +140,7 @@ function CreateServerObject()
 		}
 		catch (error)
 		{
-			window.console.log('Could not stop webserver: ' + error)
+			LOGGER.log('Could not stop webserver: ' + error)
 		}
 	}
 
@@ -267,35 +268,28 @@ function CreateServerObject()
 		callbackFun(GetIpAddresses())
 	}
 
-	self.writeRespose = WriteResponse
-
-	self.writeResponsePageNotFound = function(response)
-	{
-		FileNotFoundResponse('base path not set', response)
-	}
-
 	// Handler for web server requests.
 	function HandleRequest(request, response)
 	{
-		//window.console.log('HandleRequest url: ' + request.url)
+		//LOGGER.log('HandleRequest url: ' + request.url)
 		//request.setEncoding('utf8')
 		var path = unescape(URL.parse(request.url).pathname)
-		//window.console.log(new Date().toTimeString() + ' SERVING: ' + path)
+		//LOGGER.log(new Date().toTimeString() + ' SERVING: ' + path)
 		if (null != mHookFun)
 		{
 			// If the hook function returns true it has processed the request.
 			if (mHookFun(request, response, path)) { return }
 		}
-		ServeFile(path, response)
+		ServeFile(request, response, path)
 	}
 
-	function ServeFile(path, response)
+	function ServeFile(request, response, path)
 	{
-		//window.console.log('ServeFile fillpath: ' + mBasePath + path)
+		//LOGGER.log('ServeFile fillpath: ' + mBasePath + path)
 		var file = GetFileStatus(mBasePath + path)
 		if (!file)
 		{
-			FileNotFoundResponse(path, response)
+			WriteResponse404(response, path)
 			return
 		}
 
@@ -311,52 +305,107 @@ function CreateServerObject()
 			var indexFile = GetFileStatus(mBasePath + path)
 			if (!indexFile)
 			{
-				FileNotFoundResponse(path, response)
+				WriteResponse404(response, path)
 				return
 			}
 		}
 		else
 		if (!file.isFile())
 		{
-			FileNotFoundResponse(path, response)
+			WriteResponse404(response, path)
 			return
 		}
 
 		// Write file data to reponse object.
-		WriteFileResponse(mBasePath + path, response)
+		WriteFileResponse(request, response, mBasePath + path)
 	}
 
-	function WriteFileResponse(fullPath, response)
+	function WriteFileResponse(request, response, fullPath)
 	{
-		var contentType = GetContentType(fullPath)
 		var data = FS.readFileSync(fullPath)
-		WriteResponse(response, data, contentType)
+		var stat = FS.statSync(fullPath)
+		var contentType = GetContentType(fullPath)
+		WriteResponse(request, response, data, stat.mtime, contentType)
 	}
 
-	function WriteResponse(response, data, contentType)
+	// mtime is when the data resource was modified, may be set to null
+	// for unknown modification time.
+	function WriteResponse(request, response, data, mtime, contentType)
 	{
-		response.writeHead(
-			200,
+		var ifModifiedSince = request.headers['if-modified-since']
+		if (ifModifiedSince)
+		{
+			var ifModifiedSinceTime = new Date(ifModifiedSince).getTime()
+			var modifiedTime = mtime.getTime()
+			if (modifiedTime <= ifModifiedSinceTime)
 			{
-				'Content-Length': data.length,
-				'Content-type': contentType,
-				'Access-Control-Allow-Origin': '*',
-				'Pragma': 'no-cache',
-				'Cache-Control': 'no-cache',
-				'Expires': '-1'
-			})
+				WriteResponse304(response)
+				return
+			}
+		}
+
+		WriteResponse200(
+			response,
+			data,
+			contentType,
+			mtime.toUTCString())
+	}
+
+	function WriteResponse200(response, data, contentType, lastModified)
+	{
+		var headers =
+		{
+			'Connection': 'Keep-Alive',
+			'Keep-Alive': 'timeout=10, max=100',
+			'Content-Length': data.length,
+			'Content-type': contentType,
+			'Access-Control-Allow-Origin': '*',
+			'Cache-Control': 'no-cache, must-revalidate, max-age=0',
+		}
+
+		if (lastModified)
+		{
+			headers['Last-Modified'] = lastModified
+		}
+
+		response.writeHead(200, headers)
 		response.write(data)
 		response.end()
 	}
 
-	function FileNotFoundResponse(path, response)
+	function WriteResponse304(response)
 	{
-		response.writeHead(404)
+		LOGGER.log('@@@ WriteResponseNotModified')
+
+		var headers =
+		{
+			'Connection': 'Keep-Alive',
+			'Keep-Alive': 'timeout=10, max=100',
+		}
+		response.writeHead(304, headers)
+		response.end()
+	}
+
+	function WriteResponse404(response, path)
+	{
+		var headers =
+		{
+			'Connection': 'Keep-Alive',
+			'Keep-Alive': 'timeout=10, max=100',
+		}
+		response.writeHead(404, headers)
 		response.end('File Not Found: ' + path)
 	}
 
-	return self;
-};
+	// Additional exported functions
+	self.writeFileResponse = WriteFileResponse
+	self.writeResponse = WriteFileResponse
+	self.writeResponse200 = WriteResponse200
+	self.writeResponse304 = WriteResponse304
+	self.writeResponse404 = WriteResponse404
+
+	return self
+}
 
 function GetFileStatus(fullPath)
 {
@@ -366,7 +415,7 @@ function GetFileStatus(fullPath)
 	}
 	catch (ex)
 	{
-		window.console.log('GetFileStatus exception: ' + ex)
+		LOGGER.log('GetFileStatus exception: ' + ex)
 		return null
 	}
 }
