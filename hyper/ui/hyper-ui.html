@@ -4,7 +4,7 @@
 File: hyper-ui.html
 Description: Main application file. Defines the UI and starts the server.
 Author: Mikael Kindborg
-Copyright (c) 2013-2014 Mikael Kindborg
+Copyright (c) 2013-2015 Mikael Kindborg
 License: Apache Version 2.0
 -->
 <!-- HTML 5 differences from HTML 4: http://www.w3.org/TR/2008/WD-html5-diff-20080122/ -->
@@ -47,8 +47,8 @@ License: Apache Version 2.0
 						<span class="glyphicon glyphicon-align-justify"></span>
 					</button>
 					<ul class="dropdown-menu">
-						<li><a href="javascript:void(0)" onclick="window.showConnectKeyDialog()">Connect Key Dialog</a></li>
-						<li><a href="javascript:void(0)" onclick="alert('Not implemented yet.')">Settings</a></li>
+						<li><a href="javascript:void(0)" onclick="window.showConnectKeyDialog()">Connect Key</a></li>
+						<li><a href="javascript:void(0)" onclick="window.showSettingsDialog()">Settings</a></li>
 					</ul>
 				</div>
 			</div>
@@ -119,6 +119,57 @@ License: Apache Version 2.0
 								class="btn btn-default"
 								data-dismiss="modal">
 								Close
+							</button>
+						</div>
+					</div>
+				</div>
+			</div>
+
+			<!-- Modal dialog: dialog-settings -->
+			<div class="modal fade"
+				id="dialog-settings"
+				tabindex="-1"
+				role="dialog"
+				aria-labelledby="dialog-settings-label"
+				aria-hidden="true">
+				<div class="modal-dialog">
+					<div class="modal-content">
+						<div class="modal-header">
+							<button type="button" class="close" data-dismiss="modal" aria-hidden="true">&times;</button>
+							<h4 class="modal-title" id="dialog-settings-label">
+								Settings Dialog
+							</h4>
+						</div>
+
+						<div class="modal-body">
+							<div class="form-group">
+								<label for="input-setting-javascript-workbench-font-size">
+									JavaScript Workbench font size:</label>
+								<input type="text"
+									id="input-setting-javascript-workbench-font-size"
+									class="form-control"
+									placeholder="24px"/>
+							</div>
+							<div class="form-group">
+								<label for="input-setting-number-of-directory-levels">
+									Number of directory levels to monitor for live reload:</label>
+								<input type="text"
+									id="input-setting-number-of-directory-levels"
+									class="form-control"
+									placeholder="3"/>
+							</div>
+						</div>
+
+						<div class="modal-footer">
+								<button type="button"
+									class="btn btn-success"
+									onclick="hyper.UI.saveSettings()">
+									Save
+								</button>
+							<button type="button"
+								class="btn btn-default"
+								data-dismiss="modal">
+								Dismiss
 							</button>
 						</div>
 					</div>
@@ -242,6 +293,11 @@ License: Apache Version 2.0
 			mWebServer.getIpAddress(function (address) {
 				hyper.UI.showConnectDialog('http://' + address + ':8080')
 			})
+		}
+
+		window.showSettingsDialog = function()
+		{
+			hyper.UI.showSettingsDialog()
 		}
 
 		// Initialize the file server (socket.io client that

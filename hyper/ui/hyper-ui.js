@@ -482,6 +482,24 @@ hyper.UI = {}
 		updateProjectList()
 	}
 
+	hyper.UI.showSettingsDialog = function(defaultServerAddress)
+	{
+		$('#input-setting-javascript-workbench-font-size').val(
+			SETTINGS.getWorkbenchFontSize())
+		$('#input-setting-number-of-directory-levels').val(
+			SETTINGS.getNumberOfDirecoryLevelsToTraverse())
+		$('#dialog-settings').modal('show')
+	}
+
+	hyper.UI.saveSettings = function(defaultServerAddress)
+	{
+		SETTINGS.setWorkbenchFontSize(
+			$('#input-setting-javascript-workbench-font-size').val())
+		SETTINGS.setNumberOfDirecoryLevelsToTraverse(
+			parseInt($('#input-setting-number-of-directory-levels').val()))
+		$('#dialog-settings').modal('hide')
+	}
+
 	hyper.UI.showConnectDialog = function(defaultServerAddress)
 	{
 		$('#input-connect-url').val(defaultServerAddress)
