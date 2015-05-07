@@ -66,16 +66,23 @@ function fileResponse(fullPath, ifModifiedSince)
 	var contentType = getContentType(fullPath)
 	var data = FS.readFileSync(fullPath)
 	var stat = FS.statSync(fullPath)
-	return createResponse(data, mtime, contentType, ifModifiedSince)
+	return createResponse(data, stat.mtime, contentType, ifModifiedSince)
 }
 
 function createResponse(data, mtime, contentType, ifModifiedSince)
 {
+	LOGGER.log('resource-loader.createResponse')
+
 	// If resource is not updated send 304.
 	if (ifModifiedSince)
 	{
 		var ifModifiedSinceTime = new Date(ifModifiedSince).getTime()
 		var modifiedTime = mtime.getTime()
+
+		LOGGER.log('ifModifiedSince: ' + ifModifiedSince)
+		LOGGER.log('ifModifiedSinceTime: ' + ifModifiedSinceTime)
+		LOGGER.log('modifiedTime: ' + modifiedTime)
+
 		if (modifiedTime <= ifModifiedSinceTime)
 		{
 			return createResponse304()

@@ -353,6 +353,8 @@ function CreateServerObject()
 
 	function WriteResponse200(response, data, contentType, lastModified)
 	{
+		LOGGER.log('@@@ WriteResponse200')
+
 		var headers =
 		{
 			'Connection': 'Keep-Alive',
@@ -360,7 +362,8 @@ function CreateServerObject()
 			'Content-Length': data.length,
 			'Content-type': contentType,
 			'Access-Control-Allow-Origin': '*',
-			'Cache-Control': 'no-cache, must-revalidate, max-age=0',
+			//'Cache-Control': 'no-cache, must-revalidate, max-age=0',
+			'Cache-Control': 'no-cache, must-revalidate',
 		}
 
 		if (lastModified)
@@ -375,7 +378,7 @@ function CreateServerObject()
 
 	function WriteResponse304(response)
 	{
-		LOGGER.log('@@@ WriteResponseNotModified')
+		LOGGER.log('@@@ WriteResponse304')
 
 		var headers =
 		{
@@ -388,6 +391,8 @@ function CreateServerObject()
 
 	function WriteResponse404(response, path)
 	{
+		LOGGER.log('@@@ WriteResponse404')
+
 		var headers =
 		{
 			'Connection': 'Keep-Alive',

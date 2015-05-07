@@ -128,7 +128,8 @@ window.hyper = (function(hyper, userKey)
 				hyper.showMessage('Loading')
 
 				setTimeout(function() {
-					window.location.reload(true) },
+					//window.location.reload(true)
+					window.location.reload() },
 					300)
 			}
 		})

@@ -192,6 +192,7 @@ function serveRootRequest()
  */
 function serveReloaderScript(ifModifiedSince)
 {
+	LOGGER.log('serveReloaderScript')
 	var path = './hyper/server/hyper-reloader.js'
 	var script = FILEUTIL.readFileSync(path)
 	var stat = FILEUTIL.statSync(path)
@@ -230,6 +231,7 @@ function serveHtmlFileWithScriptInjection(filePath, ifModifiedSince)
  */
 function serveHtmlFile(path, ifModifiedSince)
 {
+	LOGGER.log('serveHtmlFile: ' + path)
 	var html = FILEUTIL.readFileSync(path)
 	var stat = FILEUTIL.statSync(path)
 	if (html && stat)

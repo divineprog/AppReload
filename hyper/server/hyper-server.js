@@ -29,14 +29,14 @@ var FS = require('fs')
 var PATH = require('path')
 var SOCKETIO = require('socket.io')
 var FILEUTIL = require('./fileutil.js')
-var WEBSERVER = require('./webserver')
+var WEBSERVER = require('./webserver.js')
 var LOGGER = require('./log.js')
 
 /*********************************/
 /***     Global variables      ***/
 /*********************************/
 
-var mWebServerPort = 4044
+var mWebServerPort = 8080
 var mWebServer = null
 var mBasePath = ''
 var mIO = null

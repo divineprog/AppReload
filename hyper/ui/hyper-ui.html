@@ -81,7 +81,7 @@ License: Apache Version 2.0
 								<input type="text"
 									id="input-connect-url"
 									class="form-control"
-									value="http://localhost:4044"
+									value="http://localhost:8080"
 									placeholder="Enter server URL"/>
 							</div>
 
@@ -157,7 +157,7 @@ License: Apache Version 2.0
 
 		<div id="panel-bottom">
 			<div>
-				<p style="float:left;">Server URL: <b><span id="connect-address">Waiting to connect</span></b></p>
+				<p style="float:left;">Status: <b><span id="connect-address">Waiting to connect</span></b></p>
 				<p style="float:right;">Clients: <b><span id="connect-counter">0</span></b> Files: <b><span id="files-counter">0</span></b></p>
 			</div>
 		</div>
@@ -181,8 +181,12 @@ License: Apache Version 2.0
 	{
 		var PATH = require('path')
 		var GUI = require('nw.gui')
+		var WEBSERVER = require('../server/webserver.js')
+		var LOGGER = require('../server/log.js')
+
 		var button = null
 		var mQuickStartWindow = null
+		var mWebServer = WEBSERVER.create()
 
 		var url = 'file://' + PATH.resolve('./documentation/index.html')
 		button = $('#button-documentation')
@@ -224,7 +228,11 @@ License: Apache Version 2.0
 
 		window.showConnectDialog = function()
 		{
-			$('#dialog-connect').modal('show')
+			mWebServer.getIpAddress(function (address)
+			{
+				$('#input-connect-url').val('http://' + address + ':8080')
+				$('#dialog-connect').modal('show')
+			})
 		}
 
 		hyper.setUpServer()
