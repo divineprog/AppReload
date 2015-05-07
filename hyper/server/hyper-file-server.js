@@ -39,13 +39,13 @@ var LOGGER = require('./log.js')
 
 var mUserKey = 'DefaultUserKey'
 var mRemoteServerURL = ''
-var mSocket
-var mAppPath
-var mAppFile
-var mMessageCallback
-var mClientConnectedCallback
-var mReloadCallback
-var mStatusCallback
+var mSocket = null
+var mAppPath = null
+var mAppFile = null
+var mMessageCallback = null
+var mClientConnectedCallback = null
+var mReloadCallback = null
+var mStatusCallback = null
 
 // The current base directory. Must NOT end with a slash.
 var mBasePath = ''
@@ -59,7 +59,9 @@ function connectToRemoteServer()
 	LOGGER.log('Connecting to remote server')
 
 	// Create socket.
-	var socket = SOCKETIO_CLIENT(mRemoteServerURL)
+	var socket = SOCKETIO_CLIENT(
+		mRemoteServerURL,
+		{ 'force new connection': true })
 
 	// Global reference
 	mSocket = socket
@@ -78,13 +80,16 @@ function connectToRemoteServer()
 
 	socket.on('disconnect', function()
 	{
-		mStatusCallback && mStatusCallback('Disconnected')
+		mStatusCallback && mStatusCallback({
+			event: 'disconnected' })
 	})
 
 	socket.on('hyper.user-key', function(data)
 	{
 		mUserKey = data.key
-		mStatusCallback && mStatusCallback('Connected Key: ' + mUserKey)
+		mStatusCallback && mStatusCallback({
+			event: 'connected',
+			key: mUserKey })
 	})
 
 	// Get resource function.
@@ -126,6 +131,16 @@ function connectToRemoteServer()
 		mMessageCallback && mMessageCallback(
 			{ message: 'hyper.result', result: data })
 	})
+}
+
+function disconnectFromRemoteServer()
+{
+	LOGGER.log('Disconnecting from remote server')
+
+	if (mSocket)
+	{
+		mSocket.close()
+	}
 }
 
 /**
@@ -472,6 +487,14 @@ function getServerBaseURL()
 
 /**
  * External.
+ */
+function getUserKey()
+{
+	return mUserKey
+}
+
+/**
+ * External.
  *
  * Reloads the main HTML file of the current app.
  */
@@ -576,5 +599,7 @@ exports.setStatusCallbackFun = setStatusCallbackFun
 exports.setReloadCallbackFun = setReloadCallbackFun
 exports.serveResource = serveResource
 exports.connectToRemoteServer = connectToRemoteServer
+exports.disconnectFromRemoteServer = disconnectFromRemoteServer
 //exports.setUserKey = setUserKey
+exports.getUserKey = getUserKey
 exports.setRemoteServerURL = setRemoteServerURL

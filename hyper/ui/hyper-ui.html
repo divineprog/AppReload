@@ -15,6 +15,25 @@ License: Apache Version 2.0
 	<script src="../libs/jquery/jquery-ui-1.10.3.custom.min.js"></script>
 	<script src="../libs/bootstrap-3.1.1/js/bootstrap.min.js"></script>
 	<link href="hyper-ui.css" rel="stylesheet" />
+	<style>
+	.glyphicon-spin {
+		-webkit-animation: spin 1000ms infinite linear;
+		animation: spin 1000ms infinite linear; }
+	@-webkit-keyframes spin {
+		0% {
+			-webkit-transform: rotate(0deg);
+			transform: rotate(0deg); }
+		100% {
+			-webkit-transform: rotate(359deg);
+			transform: rotate(359deg); } }
+	@keyframes spin {
+		0% {
+			-webkit-transform: rotate(0deg);
+			transform: rotate(0deg); }
+		100% {
+			-webkit-transform: rotate(359deg);
+			transform: rotate(359deg); } }
+	</style>
 </head>
 <body>
 	<div id="panel-page">
@@ -28,7 +47,7 @@ License: Apache Version 2.0
 						<span class="glyphicon glyphicon-align-justify"></span>
 					</button>
 					<ul class="dropdown-menu">
-						<li><a href="javascript:void(0)" onclick="showConnectDialog()">Connect To Server</a></li>
+						<li><a href="javascript:void(0)" onclick="window.showConnectKeyDialog()">Connect Key Dialog</a></li>
 						<li><a href="javascript:void(0)" onclick="alert('Not implemented yet.')">Settings</a></li>
 					</ul>
 				</div>
@@ -61,7 +80,7 @@ License: Apache Version 2.0
 						<div class="modal-header">
 							<button type="button" class="close" data-dismiss="modal" aria-hidden="true">&times;</button>
 							<h4 class="modal-title" id="dialog-connect-label">
-								Connect To Server
+								Connect Key Dialog
 							</h4>
 						</div>
 
@@ -77,7 +96,7 @@ License: Apache Version 2.0
 							-->
 
 							<div class="form-group">
-								<label for="input-connect-url">Server URL:</label>
+								<label for="input-connect-url">Key Server:</label>
 								<input type="text"
 									id="input-connect-url"
 									class="form-control"
@@ -85,19 +104,21 @@ License: Apache Version 2.0
 									placeholder="Enter server URL"/>
 							</div>
 
-							<p>Enter server URL and click Connect. Your connect key is displayed in the bottom status bar. Use this key when connecting from the HyperReload mobile app.</p>
+							<p>Click "Get Key" to obtain a connect key. Use this key when connecting from the HyperReload mobile app.</p>
+
+							<p>Your key is: <strong><span id="connect-key">[Waiting for key]</span></strong></p>
 						</div>
 
 						<div class="modal-footer">
 								<button type="button"
 									class="btn btn-success"
-									onclick="setConnectKeyAndConnect()">
-									Connect
+									onclick="hyper.UI.connectToServer()">
+									Get Key <span id="connect-spinner" class="glyphicon glyphicon-refresh glyphicon-spin"></span>
 								</button>
 							<button type="button"
 								class="btn btn-default"
 								data-dismiss="modal">
-								Dismiss
+								Close
 							</button>
 						</div>
 					</div>
@@ -216,28 +237,19 @@ License: Apache Version 2.0
 			}
 		})
 
-		window.setConnectKeyAndConnect = function()
+		window.showConnectKeyDialog = function()
 		{
-			//var key = $('#input-connect-key').val()
-			//hyper.setUserKey(key)
-			var url = $('#input-connect-url').val()
-			hyper.setRemoteServerURL(url)
-			hyper.startServer()
-			$('#dialog-connect').modal('hide')
-		}
-
-		window.showConnectDialog = function()
-		{
-			mWebServer.getIpAddress(function (address)
-			{
-				$('#input-connect-url').val('http://' + address + ':8080')
-				$('#dialog-connect').modal('show')
+			mWebServer.getIpAddress(function (address) {
+				hyper.UI.showConnectDialog('http://' + address + ':8080')
 			})
 		}
 
+		// Initialize the file server (socket.io client that
+		// handles file requests).
 		hyper.setUpServer()
 
-		setTimeout(window.showConnectDialog, 100)
+		// Display the Connect dialog box.
+		setTimeout(window.showConnectKeyDialog, 100)
 	})()
 	</script>
 </body>

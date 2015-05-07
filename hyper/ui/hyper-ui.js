@@ -432,9 +432,9 @@ hyper.UI = {}
 		hyper.setProjectList(projects)
 	}
 
-	hyper.UI.displayIpAddress = function(ip)
+	hyper.UI.displayConnectStatus = function(status)
 	{
-		document.querySelector('#connect-address').innerHTML = ip
+		document.querySelector('#connect-address').innerHTML = status
 	}
 
 	hyper.UI.setConnectedCounter = function(value)
@@ -482,6 +482,36 @@ hyper.UI = {}
 		updateProjectList()
 	}
 
+	hyper.UI.showConnectDialog = function(defaultServerAddress)
+	{
+		$('#input-connect-url').val(defaultServerAddress)
+		$('#connect-spinner').css('display', 'none')
+		$('#dialog-connect').modal('show')
+	}
+
+	// Called when the Connect button in the Connect dialog is clicked.
+	hyper.UI.connectToServer = function()
+	{
+		//var key = $('#input-connect-key').val()
+		//hyper.setUserKey(key)
+
+		$('#connect-spinner').css('display', 'inline-block')
+		hyper.stopServer()
+		var url = $('#input-connect-url').val()
+		hyper.setRemoteServerURL(url)
+		hyper.startServer()
+
+		// Let the user hide the dialog.
+		//$('#dialog-connect').modal('hide')
+	}
+
+	// Called from connect status callback.
+	hyper.UI.displayConnectKey = function(key)
+	{
+		$('#connect-spinner').css('display', 'none')
+		$('#connect-key').html(key)
+	}
+
 	setupUI()
 })()
 
@@ -524,12 +554,14 @@ hyper.UI = {}
 		SERVER.connectToRemoteServer()
 		MONITOR.setTraverseNumDirectoryLevels(
 			SETTINGS.getNumberOfDirecoryLevelsToTraverse())
-		MONITOR.runFileSystemMonitor()
+		MONITOR.startFileSystemMonitor()
 	}
 
-	function displayMessage(message)
+	hyper.stopServer = function()
 	{
-		hyper.UI.displayIpAddress(message)
+		// Stop server tasks.
+		SERVER.disconnectFromRemoteServer()
+		MONITOR.stopFileSystemMonitor()
 	}
 
 	// The Run button in the UI has been clicked.
@@ -611,7 +643,15 @@ hyper.UI = {}
 
 	function statusCallback(message)
 	{
-		displayMessage(message)
+		if (message.event == 'connected')
+		{
+			hyper.UI.displayConnectKey(message.key)
+			hyper.UI.displayConnectStatus('Connected')
+		}
+		else if (message.event == 'disconnected')
+		{
+			hyper.UI.displayConnectStatus('Disconnected')
+		}
 	}
 
 	function readProjectList()

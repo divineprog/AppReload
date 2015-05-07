@@ -33,6 +33,7 @@ var mFileCounter = 0
 var mNumberOfMonitoredFiles = 0
 var mBasePath = null
 var mFileSystemChangedCallback
+var mRunFileSystemMonitor = true
 
 /*** File traversal functions ***/
 
@@ -63,8 +64,36 @@ function getNumberOfMonitoredFiles()
 /**
  * External.
  */
+function startFileSystemMonitor()
+{
+	mRunFileSystemMonitor = true
+	runFileSystemMonitor()
+}
+
+/**
+ * External.
+ */
+function stopFileSystemMonitor()
+{
+	mRunFileSystemMonitor = false
+}
+
+/**
+ * External.
+ */
+
+function setFileSystemChangedCallbackFun(fun)
+{
+	mFileSystemChangedCallback = fun
+}
+
+/**
+ * Internal.
+ */
 function runFileSystemMonitor()
 {
+	if (!mRunFileSystemMonitor) { return }
+
 	mFileCounter = 0
 	var filesUpdated = fileSystemMonitorWorker(
 		mBasePath,
@@ -79,11 +108,6 @@ function runFileSystemMonitor()
 		mNumberOfMonitoredFiles = mFileCounter
 		setTimeout(runFileSystemMonitor, 500)
 	}
-}
-
-function setFileSystemChangedCallbackFun(fun)
-{
-	mFileSystemChangedCallback = fun
 }
 
 /**
@@ -150,4 +174,5 @@ exports.setBasePath = setBasePath
 exports.setTraverseNumDirectoryLevels = setTraverseNumDirectoryLevels
 exports.getNumberOfMonitoredFiles = getNumberOfMonitoredFiles
 exports.setFileSystemChangedCallbackFun = setFileSystemChangedCallbackFun
-exports.runFileSystemMonitor = runFileSystemMonitor
+exports.startFileSystemMonitor = startFileSystemMonitor
+exports.stopFileSystemMonitor = stopFileSystemMonitor
