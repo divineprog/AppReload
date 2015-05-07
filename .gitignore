@@ -1,17 +1,26 @@
-# node-webkit binaries
-libffmpegsumo.so
-nw
-nw.pak
-HyperReload.app
+# node-webkit distribution files
+/credits.html
+/icudtl.dat
+/libffmpegsumo.so
+/locales
+/node-webkit
+/nw
+/nwjs
+/nwjc
+/nwsnapshot
+/nw.pak
+/HyperReload.app
+/d3compiler_46.dll
+/ffmpegsumo.dll
+/libEGL.dll
+/libGLESv2.dll
+/nw.exe
 
 # Mac files
 .DS_store
 
 # HyperReload project list file
-#project-list.json
-
-# HyperReload settings file
-#hyper/settings/settings.js
+project-list.json
 
 # Local build settings
 localConfig.rb
