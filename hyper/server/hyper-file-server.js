@@ -46,6 +46,7 @@ var mMessageCallback = null
 var mClientConnectedCallback = null
 var mReloadCallback = null
 var mStatusCallback = null
+var mCheckIfModifiedSince = false
 
 // The current base directory. Must NOT end with a slash.
 var mBasePath = ''
@@ -54,6 +55,9 @@ var mBasePath = ''
 /***     Server functions      ***/
 /*********************************/
 
+/**
+ * External.
+ */
 function connectToRemoteServer()
 {
 	LOGGER.log('Connecting to remote server')
@@ -96,10 +100,15 @@ function connectToRemoteServer()
 	socket.on('hyper.resource-request', function(data)
 	{
 		//LOGGER.log('hyper.resource-request: ' + data.path)
+
+		var ifModifiedSince =
+			mCheckIfModifiedSince
+				? data.ifModifiedSince
+				: null
 		var response = serveResource(
 			data.platform,
 			data.path,
-			data.ifModifiedSince)
+			ifModifiedSince)
 		socket.emit(
 			'hyper.resource-response',
 			{
@@ -133,6 +142,9 @@ function connectToRemoteServer()
 	})
 }
 
+/**
+ * External.
+ */
 function disconnectFromRemoteServer()
 {
 	LOGGER.log('Disconnecting from remote server')
@@ -141,6 +153,22 @@ function disconnectFromRemoteServer()
 	{
 		mSocket.close()
 	}
+}
+
+/**
+ * Internal.
+ */
+function serveUsingResponse200()
+{
+	mCheckIfModifiedSince = false
+}
+
+/**
+ * Internal.
+ */
+function serveUsingResponse304()
+{
+	mCheckIfModifiedSince = true
 }
 
 /**
@@ -500,6 +528,7 @@ function getUserKey()
  */
 function runApp()
 {
+	serveUsingResponse200()
 	mSocket.emit('hyper.run', { key: mUserKey, url: getAppServerURL() })
 }
 
@@ -510,6 +539,7 @@ function runApp()
  */
 function reloadApp()
 {
+	serveUsingResponse304()
 	mSocket.emit('hyper.reload', { key: mUserKey })
 	mReloadCallback && mReloadCallback()
 }

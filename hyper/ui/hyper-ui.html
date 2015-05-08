@@ -16,6 +16,11 @@ License: Apache Version 2.0
 	<script src="../libs/bootstrap-3.1.1/js/bootstrap.min.js"></script>
 	<link href="hyper-ui.css" rel="stylesheet" />
 	<style>
+	#connect-key {
+		font-size: 125%;
+		font-weight: bold; }
+
+	/* For spinning icon on the Get Key button */
 	.glyphicon-spin {
 		-webkit-animation: spin 1000ms infinite linear;
 		animation: spin 1000ms infinite linear; }
@@ -104,9 +109,15 @@ License: Apache Version 2.0
 									placeholder="Enter server URL"/>
 							</div>
 
+							<p>To connect to the Workbench from the HyperReload mobile app, you need Internet access and a connect key.</p>
+
 							<p>Click "Get Key" to obtain a connect key. Use this key when connecting from the HyperReload mobile app.</p>
 
-							<p>Your key is: <strong><span id="connect-key">[Waiting for key]</span></strong></p>
+							<p>Click "Close" to close this dialog box. If you need to find your key again, open this dialog from the menu icon in the upper-left corner of the Workbench window.</p>
+							<p>Your key is:</p>
+							<div class="well">
+								<span id="connect-key">[Click "Get Key"]</span>
+							</div>
 						</div>
 
 						<div class="modal-footer">
